@@ -20,7 +20,8 @@
 - [ ] Verify latest CI run and fix any remaining analyzer/test failures
 - [ ] Configure dedicated Firebase project and platform files
 - [ ] Implement sign-in, user provisioning, role management, and office-scoped permissions
-- [ ] Add asset editing, retirement, barcode/QR identifiers, and stronger duplicate-serial enforcement
+- [x] Add asset editing and safe retirement with movement history
+- [ ] Add barcode/QR identifiers and concurrency-safe duplicate-serial enforcement
 - [x] Add transactional custody return, asset status restoration, and movement history
 - [ ] Add custody transfer, printable custody forms, and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
