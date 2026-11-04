@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/services/asset_repository.dart';
@@ -165,6 +166,9 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
     setState(() => importing = true);
     var success = 0;
     final failures = <String>[];
+    final skippedInvalidRows = rows.where((row) => !row.valid).length;
+    final batchId = const Uuid().v4();
+    final actorUid = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
     for (final row in validRows) {
       try {
         await repository.createAsset(row.asset);
@@ -173,6 +177,24 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
         row.errors.add('تعذر الاستيراد: $error');
         failures.add('السطر ${row.rowNumber}: $error');
       }
+    }
+    String? auditError;
+    try {
+      await FirebaseFirestore.instance.collection('import_batches').doc(batchId).set({
+        'sourceName': sourceName ?? 'asset-import.csv',
+        'createdBy': actorUid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'completedAt': FieldValue.serverTimestamp(),
+        'totalRows': rows.length,
+        'attemptedRows': validRows.length,
+        'succeededRows': success,
+        'failedRows': failures.length,
+        'skippedInvalidRows': skippedInvalidRows,
+        'status': failures.isEmpty ? 'completed' : (success > 0 ? 'partial' : 'failed'),
+        'rowErrors': failures,
+      });
+    } catch (error) {
+      auditError = error.toString();
     }
     if (!mounted) return;
     setState(() {
@@ -191,6 +213,8 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('تمت إضافة $success أصل بنجاح من أصل ${validRows.length}.'),
+                Text('رقم دفعة الاستيراد: $batchId'),
+                if (auditError != null) Text('تعذر حفظ سجل التدقيق: $auditError'),
                 if (failures.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Text('الصفوف التي تعذر استيرادها:', style: TextStyle(fontWeight: FontWeight.bold)),
