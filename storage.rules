@@ -13,7 +13,7 @@ service firebase.storage {
 
     match /asset_documents/{assetId}/{fileName} {
       allow read: if activeUser();
-      allow create: if adminUser() &&
+      allow create: if resource == null && adminUser() &&
         request.resource.size < 10 * 1024 * 1024 &&
         request.resource.contentType.matches(
           'application/pdf|image/png|image/jpeg|application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
