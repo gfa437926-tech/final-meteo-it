@@ -6,7 +6,9 @@ Arabic-first Flutter/Dart application for managing IT equipment inventory, offic
 - Flutter Material 3 application shell with Arabic RTL layout.
 - Asset model with localized categories and lifecycle statuses.
 - Firestore asset repository, live inventory list, search and category/status filters.
-- Asset creation form with conditional CPU, RAM, and storage fields for desktop/laptop devices.
+- Asset creation and editing forms with conditional CPU, RAM, and storage fields for desktop/laptop devices.
+- Safe asset retirement with reason capture, movement-history logging, and safeguards for assigned or maintenance assets.
+- Chronological asset movement register connected from the main navigation.
 - Office directory with Firestore listing, search, and office creation.
 - Custody records with transactional asset assignment and status update.
 - Live inventory summary by status and device category.
@@ -28,7 +30,7 @@ See [Firebase setup](docs/firebase-setup.md), [architecture](docs/architecture.m
 
 ## Current limitations
 - Firebase project credentials and real organization data are intentionally not included.
-- Authentication UI, role administration, office-scoped permissions, editing/retiring assets, maintenance workflows, movement history, and document attachments are not complete.
+- Authentication UI, role administration, office-scoped permissions, spare-parts records, and document attachments are not complete.
 - Duplicate serial detection currently runs in the client and is not a concurrency-safe uniqueness guarantee.
 - Excel/PDF exports and Google Sheets synchronization remain pending.
 - The repository has not yet been verified by a production build or deployed to end-user devices.
