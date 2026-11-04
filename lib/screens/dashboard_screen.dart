@@ -11,6 +11,7 @@ import 'package:metra_it_assets/screens/asset_movements_screen.dart';
 import 'package:metra_it_assets/screens/user_management_screen.dart';
 import 'package:metra_it_assets/screens/purchases_screen.dart';
 import 'package:metra_it_assets/screens/service_history_screen.dart';
+import 'package:metra_it_assets/screens/spare_parts_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -253,6 +254,7 @@ class _SideNavigation extends StatelessWidget {
       _NavItem(icon: Icons.swap_horiz, label: 'حركة الأجهزة', destination: const AssetMovementsScreen()),
       _NavItem(icon: Icons.build_outlined, label: 'الصيانة', destination: const MaintenanceScreen()),
       _NavItem(icon: Icons.history_edu_outlined, label: 'السجل الفني للأجهزة', destination: const ServiceHistoryScreen()),
+      _NavItem(icon: Icons.inventory_2_outlined, label: 'مخزون قطع الغيار', destination: const SparePartsScreen()),
       _NavItem(icon: Icons.receipt_long_outlined, label: 'المشتريات والضمان', destination: const PurchasesScreen()),
       _NavItem(icon: Icons.analytics_outlined, label: 'التقارير', destination: const ReportsScreen()),
       StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
