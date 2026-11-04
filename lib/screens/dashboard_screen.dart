@@ -148,7 +148,7 @@ class _Panel extends StatelessWidget {
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(
     crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 16), child: SizedBox.shrink(),
+      const SizedBox(height: 16),
       child,
     ],
   )));
