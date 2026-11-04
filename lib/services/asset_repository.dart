@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/models/office.dart';
 
 class AssetRepository {
   AssetRepository({FirebaseFirestore? firestore}) : _db = firestore ?? FirebaseFirestore.instance;
@@ -27,6 +28,43 @@ class AssetRepository {
     }
     await _assets.doc(asset.id).update(asset.toMap());
   }
+
+  Future<void> transferAsset(Asset asset, Office destination, {String notes = ''}) =>
+      _db.runTransaction((tx) async {
+    final assetRef = _assets.doc(asset.id);
+    final officeRef = _db.collection('offices').doc(destination.id);
+    final assetSnap = await tx.get(assetRef);
+    final officeSnap = await tx.get(officeRef);
+    if (!assetSnap.exists) throw StateError('الجهاز غير موجود');
+    if (!officeSnap.exists || officeSnap.data()?['isActive'] == false) {
+      throw StateError('المكتب الوجهة غير موجود أو غير فعال');
+    }
+    final data = assetSnap.data()!;
+    final status = data['status'] as String? ?? AssetStatus.available.name;
+    if (status != AssetStatus.available.name && status != AssetStatus.returned.name) {
+      throw StateError('لا يمكن نقل الجهاز إلا إذا كان متاحاً وغير مرتبط بعهدة أو صيانة');
+    }
+    final fromOfficeId = data['officeId'] as String? ?? '';
+    final fromOfficeName = data['officeName'] as String? ?? 'غير محدد';
+    if (fromOfficeId == destination.id) throw StateError('الجهاز موجود بالفعل في المكتب المحدد');
+    tx.update(assetRef, {
+      'officeId': destination.id,
+      'officeName': destination.name,
+      'transferredAt': FieldValue.serverTimestamp(),
+    });
+    final movement = _db.collection('asset_movements').doc();
+    tx.set(movement, {
+      'assetId': asset.id,
+      'assetLabel': '${data['brand'] ?? ''} ${data['model'] ?? ''}'.trim(),
+      'movementType': 'transferred',
+      'occurredAt': FieldValue.serverTimestamp(),
+      'fromOfficeId': fromOfficeId,
+      'fromOfficeName': fromOfficeName,
+      'toOfficeId': destination.id,
+      'toOfficeName': destination.name,
+      'notes': notes.trim(),
+    });
+  });
 
   Future<void> retireAsset(Asset asset, {String reason = ''}) =>
       _db.runTransaction((tx) async {
