@@ -42,10 +42,11 @@ class AssetRepository {
       if (serial.isNotEmpty) {
         serialRef = _serialRef(serial);
         final serialSnapshot = await tx.get(serialRef);
-        final legacyMatches = await tx.get(
-          _assets.where('serialNumber', isEqualTo: serial).limit(2),
-        );
-        if (serialSnapshot.exists || legacyMatches.docs.isNotEmpty) {
+        final legacyMatches = await tx.get(_assets);
+        final legacyDuplicate = legacyMatches.docs.any((doc) =>
+            _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
+            serial);
+        if (serialSnapshot.exists || legacyDuplicate) {
           throw StateError('الرقم التسلسلي مسجل مسبقاً');
         }
       }
@@ -89,11 +90,12 @@ class AssetRepository {
       if (newSerial.isNotEmpty && serialChanged) {
         newSerialRef = _serialRef(newSerial);
         newSerialSnapshot = await tx.get(newSerialRef);
-        final legacyMatches = await tx.get(
-          _assets.where('serialNumber', isEqualTo: newSerial).limit(3),
-        );
-        if (newSerialSnapshot.exists ||
-            legacyMatches.docs.any((doc) => doc.id != asset.id)) {
+        final legacyMatches = await tx.get(_assets);
+        final legacyDuplicate = legacyMatches.docs.any((doc) =>
+            doc.id != asset.id &&
+            _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
+                newSerial);
+        if (newSerialSnapshot.exists || legacyDuplicate) {
           throw StateError('الرقم التسلسلي مسجل لجهاز آخر');
         }
       }
