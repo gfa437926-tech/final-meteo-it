@@ -17,7 +17,11 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create, update: if isSuperAdmin() && request.auth.uid != uid;
+      allow create: if isSuperAdmin() && request.auth.uid != uid;
+      allow update: if (isSuperAdmin() && request.auth.uid != uid) ||
+        (signedIn() && request.auth.uid == uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'email', 'updatedAt']));
       allow delete: if false;
     }
     match /offices/{officeId} {
