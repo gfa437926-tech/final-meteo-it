@@ -73,7 +73,8 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                             .compareTo(_date(a.data()['reportedAt'])));
                       final totalCost = records.fold<double>(
                         0,
-                        (total, doc) => total + ((doc.data()['cost'] as num?)?.toDouble() ?? 0) +\n                            ((doc.data()['partsCost'] as num?)?.toDouble() ?? 0),
+                        (total, doc) => total + ((doc.data()['cost'] as num?)?.toDouble() ?? 0) +
+                            ((doc.data()['partsCost'] as num?)?.toDouble() ?? 0),
                       );
                       return Column(
                         children: [
