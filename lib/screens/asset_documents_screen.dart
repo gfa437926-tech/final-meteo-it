@@ -16,6 +16,7 @@ class AssetDocumentsScreen extends StatefulWidget {
 class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
   String? selectedAssetId;
   String documentType = 'other';
+  String? purchaseRecordId;
   bool uploading = false;
 
   String _contentType(String extension) => switch (extension.toLowerCase()) {
@@ -73,6 +74,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
         'sizeBytes': file.size,
         'uploadedBy': uid,
         'documentType': documentType,
+        'purchaseRecordId': purchaseRecordId,
         'createdAt': FieldValue.serverTimestamp(),
       });
       _message('تم رفع المستند وربطه بالأصل');
@@ -150,7 +152,10 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                             overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
-                    onChanged: (value) => setState(() => selectedAssetId = value),
+                    onChanged: (value) => setState(() {
+                      selectedAssetId = value;
+                      purchaseRecordId = null;
+                    }),
                   );
                 },
               ),
@@ -172,10 +177,47 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                   DropdownMenuItem(value: 'other', child: Text('مستند آخر')),
                 ],
                 onChanged: (value) {
-                  if (value != null) setState(() => documentType = value);
+                  if (value != null) {
+                    setState(() {
+                      documentType = value;
+                      purchaseRecordId = null;
+                    });
+                  }
                 },
               ),
             ),
+            if (selectedAssetId != null && (documentType == 'invoice' || documentType == 'warranty'))
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('purchase_records')
+                      .where('assetId', isEqualTo: selectedAssetId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final purchases = snapshot.data?.docs ?? [];
+                    return DropdownButtonFormField<String>(
+                      initialValue: purchases.any((purchase) => purchase.id == purchaseRecordId)
+                          ? purchaseRecordId
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'فاتورة الشراء المرتبطة (اختياري)',
+                        prefixIcon: Icon(Icons.receipt_long_outlined),
+                      ),
+                      items: purchases.map((purchase) {
+                        final data = purchase.data();
+                        final invoice = data['invoiceNumber'] as String? ?? purchase.id;
+                        final supplier = data['supplier'] as String? ?? '';
+                        return DropdownMenuItem(
+                          value: purchase.id,
+                          child: Text('$invoice • $supplier', overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(),
+                      onChanged: (value) => setState(() => purchaseRecordId = value),
+                    );
+                  },
+                ),
+              ),
             Expanded(
               child: selectedAssetId == null
                   ? const Center(child: Text('اختر أصلاً لعرض مستنداته'))
