@@ -52,6 +52,31 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     title.dispose(); description.dispose(); technician.dispose();
   }
 
+
+  Future<void> _complete(MaintenanceRecord record) async {
+    final resolution = TextEditingController();
+    final cost = TextEditingController(text: '0');
+    final form = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('إغلاق طلب الصيانة'),
+      content: Form(key: form, child: SizedBox(width: 420, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextFormField(controller: resolution, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'الإجراء / الحل المنفذ'), validator: (v) => v == null || v.trim().isEmpty ? 'يرجى توثيق الحل' : null),
+        TextFormField(controller: cost, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'التكلفة'), validator: (v) => double.tryParse(v ?? '') == null || double.parse(v!) < 0 ? 'أدخل تكلفة صحيحة' : null),
+      ]))),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')), FilledButton(onPressed: () => Navigator.pop(ctx, form.currentState!.validate()), child: const Text('إغلاق الطلب'))],
+    ));
+    if (ok == true) {
+      try {
+        await repo.complete(record, resolution: resolution.text, cost: double.parse(cost.text));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أغلق طلب الصيانة وأعيد الجهاز إلى حالته السابقة')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر إغلاق الطلب: $e')));
+      }
+    }
+    resolution.dispose();
+    cost.dispose();
+  }
+
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('إدارة الصيانة')),
     floatingActionButton:FloatingActionButton.extended(onPressed:_newTicket,icon:const Icon(Icons.add),label:const Text('طلب صيانة جديد')),
@@ -61,7 +86,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
       if(s.data!.isEmpty)return const Center(child:Text('لا توجد طلبات صيانة مسجلة'));
       return ListView.separated(padding:const EdgeInsets.all(16),itemCount:s.data!.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(context,i){
         final r=s.data![i]; final priority={'low':'منخفضة','normal':'عادية','high':'عالية','urgent':'عاجلة'}[r.priority]??r.priority;
-        return Card(child:ListTile(leading:CircleAvatar(child:Icon(r.status==MaintenanceStatus.completed?Icons.check:Icons.build)),title:Text(r.title,style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('${r.assetLabel} • $priority\n${r.description}',maxLines:3,overflow:TextOverflow.ellipsis),isThreeLine:true,trailing:Chip(label:Text(r.status.label))));
+        return Card(child:ListTile(leading:CircleAvatar(child:Icon(r.status==MaintenanceStatus.completed?Icons.check:Icons.build)),title:Text(r.title,style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('${r.assetLabel} • $priority\n${r.description}',maxLines:3,overflow:TextOverflow.ellipsis),isThreeLine:true,trailing:r.status==MaintenanceStatus.open||r.status==MaintenanceStatus.inProgress?TextButton.icon(onPressed:()=>_complete(r),icon:const Icon(Icons.check_circle_outline),label:const Text('إنهاء')):Chip(label:Text(r.status.label))));
       });
     }),
   );
