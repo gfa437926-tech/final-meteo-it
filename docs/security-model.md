@@ -32,3 +32,10 @@
 ## Release limitations
 
 This is a baseline for a controlled pilot, not a complete enterprise authorization model. Office-scoped roles, trusted server-side account provisioning, Firebase Emulator rules tests, backups, and production monitoring remain required before wider deployment.
+
+
+## Spare-parts transaction boundary
+
+- Spare-part stock documents may be created and updated only by authorized admin/IT-manager profiles; client deletes are denied.
+- A maintenance-parts usage document is append-only from the client rules perspective. It is created in the same Firestore transaction that decrements stock and adds the consumed parts cost to the open maintenance ticket.
+- Firebase Emulator tests are still required before deploying these rules to a production Firebase project.
