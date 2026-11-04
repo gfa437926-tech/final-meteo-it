@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:typed_data';
+import 'package:excel/excel.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -32,6 +35,81 @@ class ReportsScreen extends StatelessWidget {
         const SnackBar(content: Text('تم نسخ تقرير CSV إلى الحافظة؛ يمكنك لصقه مباشرة في Excel')),
       );
     }
+  }
+
+  Future<void> _exportExcel(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+  ) async {
+    final workbook = Excel.createExcel();
+    final sheet = workbook['الأصول'];
+    sheet.appendRow([
+      TextCellValue('معرّف الأصل'),
+      TextCellValue('التصنيف'),
+      TextCellValue('الشركة'),
+      TextCellValue('الطراز'),
+      TextCellValue('الرقم التسلسلي'),
+      TextCellValue('الحالة'),
+      TextCellValue('المكتب'),
+    ]);
+    for (final document in documents) {
+      final data = document.data();
+      sheet.appendRow([
+        TextCellValue(document.id),
+        TextCellValue(_categoryLabel(data['category'] as String? ?? 'other')),
+        TextCellValue(data['brand']?.toString() ?? ''),
+        TextCellValue(data['model']?.toString() ?? ''),
+        TextCellValue(data['serialNumber']?.toString() ?? ''),
+        TextCellValue(_statusLabel(data['status'] as String? ?? 'available')),
+        TextCellValue(data['officeName']?.toString() ?? ''),
+      ]);
+    }
+    final bytes = workbook.encode();
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('تعذر إنشاء ملف Excel');
+    }
+    await Share.shareXFiles(
+      [
+        XFile.fromData(
+          Uint8List.fromList(bytes),
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          name: 'it-assets.xlsx',
+        ),
+      ],
+      text: 'تقرير جرد الأصول التقنية',
+    );
+  }
+
+  Future<void> _shareCsv(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+  ) async {
+    final rows = <List<dynamic>>[
+      ['معرّف الأصل', 'التصنيف', 'الشركة', 'الطراز', 'الرقم التسلسلي', 'الحالة', 'المكتب'],
+      ...documents.map((document) {
+        final data = document.data();
+        return [
+          document.id,
+          _categoryLabel(data['category'] as String? ?? 'other'),
+          data['brand'] ?? '',
+          data['model'] ?? '',
+          data['serialNumber'] ?? '',
+          _statusLabel(data['status'] as String? ?? 'available'),
+          data['officeName'] ?? '',
+        ];
+      }),
+    ];
+    final csv = '\uFEFF${const ListToCsvConverter().convert(rows)}';
+    await Share.shareXFiles(
+      [
+        XFile.fromData(
+          Uint8List.fromList(csv.codeUnits),
+          mimeType: 'text/csv',
+          name: 'it-assets.csv',
+        ),
+      ],
+      text: 'تقرير جرد الأصول التقنية بصيغة CSV',
+    );
   }
 
   static String _categoryLabel(String value) => const {
@@ -136,8 +214,44 @@ class ReportsScreen extends StatelessWidget {
                   label: const Text('نسخ تقرير الأصول بصيغة CSV'),
                 ),
                 const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: documents.isEmpty
+                      ? null
+                      : () async {
+                          try {
+                            await _shareCsv(context, documents);
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('تعذر مشاركة CSV: $error')),
+                              );
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('تصدير CSV كملف'),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: documents.isEmpty
+                      ? null
+                      : () async {
+                          try {
+                            await _exportExcel(context, documents);
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('تعذر تصدير Excel: $error')),
+                              );
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.table_view_outlined),
+                  label: const Text('تصدير Excel'),
+                ),
+                const SizedBox(height: 8),
                 const Text(
-                  'يحتوي التقرير على معرّف الأصل والتصنيف والشركة والطراز والرقم التسلسلي والحالة والمكتب. يدعم النص العربي ويمكن لصقه مباشرة في Excel.',
+                  'يمكن نسخ التقرير أو مشاركته كملف CSV أو Excel، مع المحافظة على أسماء الحقول والبيانات العربية.',
                   style: TextStyle(color: Colors.black54),
                 ),
               ],
