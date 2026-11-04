@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:metra_it_assets/services/custody_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -144,6 +148,91 @@ class _CustodyScreenState extends State<CustodyScreen> {
     notes.clear();
     assetId = null;
     assetLabel = null;
+  }
+
+  String _escapeHtml(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+  Future<void> printForm(CustodyRecord record) async {
+    final statusLabel = switch (record.status) {
+      'returned' => 'مغلقة - تم إرجاع الأصل',
+      'rejected' => 'مرفوضة',
+      _ when record.approvalStatus == 'pending' => 'بانتظار الاعتماد',
+      _ => 'معتمدة ونشطة',
+    };
+    final html = '''
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>محضر عهدة تقنية - ${_escapeHtml(record.id)}</title>
+<style>
+@page { size: A4; margin: 18mm; }
+* { box-sizing: border-box; }
+body { font-family: Tahoma, Arial, sans-serif; color: #172b3a; line-height: 1.8; }
+header { text-align: center; border-bottom: 3px solid #168c8c; padding-bottom: 14px; margin-bottom: 20px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 22px 0 8px; color: #183b56; }
+.meta { color: #536574; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
+th, td { border: 1px solid #aab8c2; padding: 9px 11px; text-align: right; }
+th { width: 27%; background: #edf4f5; }
+.notice { border: 1px solid #aab8c2; padding: 12px; border-radius: 6px; }
+.signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 18px; margin-top: 34px; }
+.signature { border-top: 1px solid #536574; padding-top: 8px; min-height: 70px; }
+footer { margin-top: 28px; font-size: 11px; color: #536574; text-align: center; }
+@media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+<header>
+<h1>محضر تسليم واستلام عهدة تقنية</h1>
+<div class="meta">نظام إدارة وجرد الأصول التقنية</div>
+<div class="meta">رقم البطاقة: ${_escapeHtml(record.id)}</div>
+</header>
+<h2>بيانات العهدة</h2>
+<table>
+<tr><th>الأصل التقني</th><td>${_escapeHtml(record.assetLabel)}</td></tr>
+<tr><th>معرّف الأصل</th><td>${_escapeHtml(record.assetId)}</td></tr>
+<tr><th>الموظف المستلم</th><td>${_escapeHtml(record.employeeName)}</td></tr>
+<tr><th>المكتب / القسم</th><td>${_escapeHtml(record.officeName)}</td></tr>
+<tr><th>تاريخ التسليم</th><td>${_escapeHtml(record.assignedAt.toLocal().toString().split('.').first)}</td></tr>
+<tr><th>حالة البطاقة</th><td>${_escapeHtml(statusLabel)}</td></tr>
+<tr><th>ملاحظات</th><td>${_escapeHtml(record.notes.isEmpty ? 'لا توجد' : record.notes)}</td></tr>
+</table>
+<h2>إقرار الاستلام</h2>
+<div class="notice">أقر أنا الموظف الموضح اسمي أعلاه باستلام الأصل التقني المبين في هذا المحضر، وأتعهد بالمحافظة عليه واستخدامه لأغراض العمل وإعادته عند الطلب أو انتهاء الحاجة إليه، وإبلاغ الجهة المختصة عن أي عطل أو فقد أو ضرر.</div>
+<div class="signatures">
+<div class="signature">اسم وتوقيع الموظف المستلم</div>
+<div class="signature">اسم وتوقيع مسؤول تقنية المعلومات</div>
+<div class="signature">اعتماد رئيس القسم / المدير</div>
+<div class="signature">تاريخ الاعتماد والختم</div>
+</div>
+<footer>تم إنشاء هذا النموذج من نظام إدارة الأصول التقنية. يرجى حفظ نسخة موقعة ضمن مستندات الأصل.</footer>
+<div class="no-print" style="text-align:center;margin-top:20px"><button onclick="window.print()">طباعة النموذج</button></div>
+</body>
+</html>
+''';
+    try {
+      await Share.shareXFiles([
+        XFile.fromData(
+          Uint8List.fromList(utf8.encode(html)),
+          mimeType: 'text/html',
+          name: 'custody-${record.id}.html',
+        ),
+      ], text: 'محضر عهدة تقنية جاهز للطباعة');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر إنشاء نموذج الطباعة: $error')),
+        );
+      }
+    }
   }
 
   Future<void> approve(CustodyRecord record) async {
@@ -351,43 +440,44 @@ class _CustodyScreenState extends State<CustodyScreen> {
                         '${record.assetLabel} • ${record.officeName}'
                         '${pending ? ' • بانتظار الاعتماد' : ''}',
                       ),
-                      trailing: pending
-                          ? Wrap(
-                              spacing: 2,
-                              children: [
-                                IconButton(
-                                  tooltip: 'اعتماد العهدة',
-                                  onPressed: () => approve(record),
-                                  icon: const Icon(Icons.check_circle_outline, color: Colors.green),
-                                ),
-                                IconButton(
-                                  tooltip: 'رفض العهدة',
-                                  onPressed: () => reject(record),
-                                  icon: const Icon(Icons.cancel_outlined, color: Colors.red),
-                                ),
-                              ],
-                            )
-                          : active
-                              ? Wrap(
-                                  spacing: 4,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'نقل العهدة',
-                                      onPressed: () => transfer(record),
-                                      icon: const Icon(Icons.swap_horiz),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'إرجاع الجهاز',
-                                      onPressed: () => returnCustody(record),
-                                      icon: const Icon(Icons.assignment_return),
-                                    ),
-                                  ],
-                                )
-                              : Chip(
-                                  label: Text(record.approvalStatus == 'rejected'
-                                      ? 'مرفوضة'
-                                      : 'مغلقة'),
-                                ),
+                      trailing: Wrap(
+                        spacing: 2,
+                        children: [
+                          IconButton(
+                            tooltip: 'إنشاء محضر للطباعة',
+                            onPressed: () => printForm(record),
+                            icon: const Icon(Icons.print_outlined),
+                          ),
+                          if (pending) ...[
+                            IconButton(
+                              tooltip: 'اعتماد العهدة',
+                              onPressed: () => approve(record),
+                              icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                            ),
+                            IconButton(
+                              tooltip: 'رفض العهدة',
+                              onPressed: () => reject(record),
+                              icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                            ),
+                          ] else if (active) ...[
+                            IconButton(
+                              tooltip: 'نقل العهدة',
+                              onPressed: () => transfer(record),
+                              icon: const Icon(Icons.swap_horiz),
+                            ),
+                            IconButton(
+                              tooltip: 'إرجاع الجهاز',
+                              onPressed: () => returnCustody(record),
+                              icon: const Icon(Icons.assignment_return),
+                            ),
+                          ] else
+                            Chip(
+                              label: Text(record.approvalStatus == 'rejected'
+                                  ? 'مرفوضة'
+                                  : 'مغلقة'),
+                            ),
+                        ],
+                      ),
                     ),
                   );
                 },
