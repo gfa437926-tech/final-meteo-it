@@ -1,14 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-class CustodyScreen extends StatelessWidget {
-  const CustodyScreen({super.key});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('بطاقات العهدة')),
-    body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      Row(children: [const Expanded(child: Text('بطاقات العهدة', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.add), label: const Text('بطاقة جديدة'))]),
-      const SizedBox(height: 18),
-      const Expanded(child: Card(child: Center(child: Text('لا توجد بطاقات عهدة بعد')))),
-    ])),
-  );
+import 'package:uuid/uuid.dart';
+import 'package:metra_it_assets/services/custody_repository.dart';
+class CustodyScreen extends StatefulWidget{const CustodyScreen({super.key});@override State<CustodyScreen> createState()=>_CustodyScreenState();}
+class _CustodyScreenState extends State<CustodyScreen>{
+ final repo=CustodyRepository();final employee=TextEditingController(),office=TextEditingController(),notes=TextEditingController();String? assetId,assetLabel;
+ @override void dispose(){employee.dispose();office.dispose();notes.dispose();super.dispose();}
+ Future<void> create()async{final key=GlobalKey<FormState>();final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('إنشاء بطاقة عهدة'),content:SizedBox(width:460,child:Form(key:key,child:Column(mainAxisSize:MainAxisSize.min,children:[
+ StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(stream:FirebaseFirestore.instance.collection('assets').where('status',isEqualTo:'available').snapshots(),builder:(c,s){final docs=s.data?.docs??[];return DropdownButtonFormField<String>(decoration:const InputDecoration(labelText:'الجهاز المتاح'),items:docs.map((d){final m=d.data();return DropdownMenuItem(value:d.id,child:Text('${m['brand']??''} ${m['model']??''} • ${m['serialNumber']??''}'));}).toList(),onChanged:(v){assetId=v;final d=docs.where((x)=>x.id==v);if(d.isNotEmpty){final m=d.first.data();assetLabel='${m['brand']??''} ${m['model']??''}';}},validator:(v)=>v==null?'اختر جهازاً':null);}),
+ const SizedBox(height:10),TextFormField(controller:employee,decoration:const InputDecoration(labelText:'اسم الموظف المستلم'),validator:(v)=>v==null||v.trim().isEmpty?'مطلوب':null),
+ TextFormField(controller:office,decoration:const InputDecoration(labelText:'المكتب / القسم'),validator:(v)=>v==null||v.trim().isEmpty?'مطلوب':null),
+ TextFormField(controller:notes,decoration:const InputDecoration(labelText:'ملاحظات')),
+ ]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,key.currentState!.validate()),child:const Text('إنشاء'))]));
+ if(ok==true&&assetId!=null){try{await repo.add(CustodyRecord(id:const Uuid().v4(),assetId:assetId!,assetLabel:assetLabel??'',employeeName:employee.text,officeName:office.text,assignedAt:DateTime.now(),notes:notes.text));if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم إنشاء بطاقة العهدة وتحديث حالة الجهاز')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر إنشاء العهدة: $e')));}}
+ employee.clear();office.clear();notes.clear();assetId=null;assetLabel=null;
+ }
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('بطاقات العهدة')),floatingActionButton:FloatingActionButton.extended(onPressed:create,icon:const Icon(Icons.assignment_add),label:const Text('بطاقة جديدة')),body:Padding(padding:const EdgeInsets.all(20),child:StreamBuilder<List<CustodyRecord>>(stream:repo.watch(),builder:(context,s){if(s.hasError)return Center(child:Text('تعذر تحميل العهد: ${s.error}'));if(!s.hasData)return const Center(child:CircularProgressIndicator());if(s.data!.isEmpty)return const Center(child:Text('لا توجد بطاقات عهدة مسجلة'));return ListView.separated(itemCount:s.data!.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(context,i){final r=s.data![i];return Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.assignment_ind)),title:Text(r.employeeName,style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('${r.assetLabel} • ${r.officeName}'),trailing:Chip(label:Text(r.status=='active'?'نشطة':'مغلقة'))));});})));
 }
