@@ -20,6 +20,7 @@ void main() {
     expect(map['notes'], 'تسليم أولي');
     expect(map['assetId'], 'asset-1');
     expect(map['status'], 'active');
+    expect(map['approvalStatus'], 'approved');
     expect(assignedAt.toIso8601String(), map['assignedAt']);
   });
 
@@ -43,3 +44,20 @@ void main() {
     expect(record.status, 'returned');
   });
 }
+
+
+  test('legacy custody records default to approved and pending records retain state', () {
+    final legacy = CustodyRecord.fromMap('legacy', {
+      'assetId': 'asset-legacy',
+      'assignedAt': '2026-11-05T10:00:00.000Z',
+    });
+    expect(legacy.approvalStatus, 'approved');
+
+    final pending = CustodyRecord.fromMap('pending-1', {
+      'assetId': 'asset-1',
+      'assignedAt': '2026-11-05T10:00:00.000Z',
+      'approvalStatus': 'pending',
+    });
+    expect(pending.approvalStatus, 'pending');
+    expect(pending.toMap()['approvalStatus'], 'pending');
+  });
