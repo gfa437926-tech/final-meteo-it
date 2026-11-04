@@ -57,3 +57,8 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - Rejection requires the card to remain pending and the linked asset to remain assigned. The transaction closes the card, restores the asset to available, records the rejection actor/reason, and writes a movement event.
 - Pending cards cannot be returned or transferred. Legacy cards without an approval field are treated as approved for compatibility.
 - Current approval permission is shared by admin and IT-manager roles; separation-of-duties and office-scoped approvers remain future authorization work.
+
+
+## Printable custody records
+
+The custody register can generate a self-contained Arabic RTL A4 HTML handover form for each card. The form escapes all user-supplied values before embedding them, includes custody and asset identifiers, employee/office details, current approval/return state, a receipt declaration, and signature/approval spaces. The generated HTML is shared as a file so it can be opened in a browser and printed; it is not a signed digital approval or a PDF archive.
