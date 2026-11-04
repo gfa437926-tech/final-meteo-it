@@ -40,6 +40,8 @@
 - [x] Add purchase invoice records linked to assets, supplier, amount, purchase date, and warranty expiry
 - [x] Add asset document upload, purpose classification, metadata register, protected Storage paths, and authenticated file sharing
 - [x] Link invoice and warranty attachments to purchase records
+- [x] Add purchase detail view with linked attachment listing and protected download/share
+- [x] Show active versus expired warranty state in the purchase register
 - [ ] Add richer receipt workflow and invoice preview
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
 - [ ] Add PDF exports
