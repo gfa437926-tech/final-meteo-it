@@ -74,6 +74,38 @@ test('users cannot elevate their own role', async () => {
   }));
 });
 
+test('only a super administrator can provision another user profile', async () => {
+  const managerDb = env.authenticatedContext('manager-1').firestore();
+  await assertFails(setDoc(doc(managerDb, 'users', 'new-user'), {
+    role: 'it_manager', isActive: true, displayName: 'New User',
+  }));
+
+  const adminDb = env.authenticatedContext('admin-1').firestore();
+  await assertSucceeds(setDoc(doc(adminDb, 'users', 'new-user'), {
+    role: 'it_manager', isActive: true, displayName: 'New User',
+  }));
+});
+
+test('super administrator cannot change own role or active state', async () => {
+  const db = env.authenticatedContext('admin-1').firestore();
+  await assertFails(updateDoc(doc(db, 'users', 'admin-1'), {
+    role: 'it_manager',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'admin-1'), {
+    isActive: false,
+  }));
+});
+
+test('inactive administrator cannot provision or modify user profiles', async () => {
+  const db = env.authenticatedContext('inactive-1').firestore();
+  await assertFails(setDoc(doc(db, 'users', 'new-user'), {
+    role: 'it_manager', isActive: true, displayName: 'New User',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    isActive: false,
+  }));
+});
+
 test('custody assignment requires atomic asset reservation and pending approval', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
   await assertSucceeds(runTransaction(db, async (tx) => {
