@@ -2,12 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:share_plus/share_plus.dart';
 
-class ReportsScreen extends StatelessWidget {
+class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
+
+  @override
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends State<ReportsScreen> {
+  String? categoryFilter;
+  String? statusFilter;
 
   Future<void> _copyCsv(
     BuildContext context,
@@ -103,7 +112,7 @@ class ReportsScreen extends StatelessWidget {
     await Share.shareXFiles(
       [
         XFile.fromData(
-          Uint8List.fromList(csv.codeUnits),
+          Uint8List.fromList(utf8.encode(csv)),
           mimeType: 'text/csv',
           name: 'it-assets.csv',
         ),
@@ -147,7 +156,7 @@ class ReportsScreen extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final documents = snapshot.data!.docs;
+            final documents = snapshot.data!.docs.where((document) {\n              final data = document.data();\n              return (categoryFilter == null || data['category'] == categoryFilter) &&\n                  (statusFilter == null || data['status'] == statusFilter);\n            }).toList();
             int count(String status) => documents
                 .where((document) => document.data()['status'] == status)
                 .length;
@@ -163,6 +172,56 @@ class ReportsScreen extends StatelessWidget {
                 const Text(
                   'ملخص الجرد الحالي',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: categoryFilter,
+                        decoration: const InputDecoration(labelText: 'تصفية حسب التصنيف'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('كل التصنيفات')),
+                          ...['desktop','laptop','monitor','printer','scanner','network','storage','ups','accessory','other']
+                              .map((value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(_categoryLabel(value)),
+                                  )),
+                        ],
+                        onChanged: (value) => setState(() => categoryFilter = value),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: statusFilter,
+                        decoration: const InputDecoration(labelText: 'تصفية حسب الحالة'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('كل الحالات')),
+                          ...['available','assigned','maintenance','damaged','retired','returned']
+                              .map((value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(_statusLabel(value)),
+                                  )),
+                        ],
+                        onChanged: (value) => setState(() => statusFilter = value),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: categoryFilter == null && statusFilter == null
+                          ? null
+                          : () => setState(() {
+                                categoryFilter = null;
+                                statusFilter = null;
+                              }),
+                      icon: const Icon(Icons.filter_alt_off),
+                      label: const Text('مسح التصفية'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 GridView.count(
