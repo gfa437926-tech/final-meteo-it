@@ -25,7 +25,7 @@
 - [ ] Add barcode/QR identifiers and concurrency-safe duplicate-serial enforcement
 - [x] Add transactional custody return, asset status restoration, and movement history
 - [x] Add transactional asset transfer between active offices with movement audit
-- [ ] Add custody transfer, printable custody forms, and approval flow
+- [x] Add transactional custody transfer between employees with movement audit\n- [ ] Add printable custody forms and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
 - [x] Add chronological asset movement history screen
