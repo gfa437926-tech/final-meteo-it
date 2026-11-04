@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/models/office.dart';
 import 'package:metra_it_assets/screens/asset_form_screen.dart';
@@ -18,6 +19,45 @@ class _AssetsScreenState extends State<AssetsScreen> {
   AssetStatus? status;
   @override
   void dispose() { search.dispose(); super.dispose(); }
+
+  Future<void> _showQr(Asset asset) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('رمز الأصل'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              QrImageView(
+                data: asset.id,
+                version: QrVersions.auto,
+                size: 220,
+                backgroundColor: Colors.white,
+                errorCorrectionLevel: QrErrorCorrectLevel.H,
+              ),
+              const SizedBox(height: 12),
+              Text('${asset.brand} ${asset.model}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              const Text('معرّف الأصل', style: TextStyle(color: Colors.black54)),
+              SelectableText(asset.id, textAlign: TextAlign.center),
+              const SizedBox(height: 6),
+              Text('الرقم التسلسلي: ${asset.serialNumber.isEmpty ? 'غير محدد' : asset.serialNumber}'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _retire(Asset asset) async {
     final reason = TextEditingController();
@@ -181,10 +221,12 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   tooltip: 'إجراءات الجهاز',
                   onSelected: (v) {
                     if (v == 'edit') Navigator.push(context, MaterialPageRoute(builder: (_) => AssetFormScreen(initialAsset: a)));
+                    if (v == 'qr') _showQr(a);
                     if (v == 'retire') _retire(a);
                     if (v == 'transfer') _transfer(a);
                   },
                   itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'qr', child: ListTile(dense: true, leading: Icon(Icons.qr_code_2), title: Text('عرض رمز QR'))),
                     const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('تعديل البيانات'))),
                     if (a.status != AssetStatus.retired) const PopupMenuItem(value: 'retire', child: ListTile(dense: true, leading: Icon(Icons.archive_outlined), title: Text('استبعاد من الخدمة'))),
                     if (a.status == AssetStatus.available || a.status == AssetStatus.returned) const PopupMenuItem(value: 'transfer', child: ListTile(dense: true, leading: Icon(Icons.drive_file_move_outline), title: Text('نقل إلى مكتب آخر'))),
