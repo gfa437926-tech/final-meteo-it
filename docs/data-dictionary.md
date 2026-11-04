@@ -20,3 +20,15 @@
 
 ## movement records
 `id, assetId, fromOfficeId, toOfficeId, fromCustodianId, toCustodianId, movedAt, documentNumber, reason, actorId`
+
+
+## spare_parts/{partId}
+
+- `name`, `sku`, `quantity`, `minimumQuantity`, `unitCost`, `supplier`
+- `createdAt`, `updatedAt`
+
+## maintenance_parts/{usageId}
+
+Append-only consumption record created in the same Firestore transaction that updates the spare-part balance and maintenance ticket:
+- `partId`, `partName`, `maintenanceId`, `assetId`
+- `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`
