@@ -39,7 +39,7 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
 - Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
 - Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
-- Firebase Emulator tests are required before deploying these rules.
+- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. Review the latest workflow result before deploying rules.
 
 
 ## File attachment controls
