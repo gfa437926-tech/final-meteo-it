@@ -43,8 +43,6 @@ void main() {
     expect(record.assignedAt.isAtSameMomentAs(DateTime.utc(2026, 11, 5, 10)), isTrue);
     expect(record.status, 'returned');
   });
-}
-
 
   test('legacy custody records default to approved and pending records retain state', () {
     final legacy = CustodyRecord.fromMap('legacy', {
@@ -61,3 +59,4 @@ void main() {
     expect(pending.approvalStatus, 'pending');
     expect(pending.toMap()['approvalStatus'], 'pending');
   });
+}
