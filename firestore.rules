@@ -57,8 +57,24 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if isSuperAdmin() && request.auth.uid != uid;
-      allow update: if (isSuperAdmin() && request.auth.uid != uid) ||
+      allow create: if isSuperAdmin() && request.auth.uid != uid &&
+        request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'role', 'isActive', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'displayName', 'email', 'role', 'isActive', 'createdAt'
+        ]) &&
+        request.resource.data.displayName is string &&
+        request.resource.data.email is string &&
+        request.resource.data.role in ['admin', 'it_manager'] &&
+        request.resource.data.isActive is bool;
+      allow update: if (isSuperAdmin() && request.auth.uid != uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'email', 'role', 'isActive', 'updatedAt']) &&
+          request.resource.data.role in ['admin', 'it_manager'] &&
+          request.resource.data.isActive is bool &&
+          request.resource.data.displayName is string &&
+          request.resource.data.email is string) ||
         (signedIn() && request.auth.uid == uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['displayName', 'email', 'updatedAt']));
