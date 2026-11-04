@@ -38,6 +38,7 @@ beforeEach(async () => {
     });
     await setDoc(doc(db, 'users', 'manager-1'), {
       role: 'it_manager', isActive: true, displayName: 'Manager',
+      email: 'manager@example.com',
     });
     await setDoc(doc(db, 'users', 'inactive-1'), {
       role: 'admin', isActive: false,
