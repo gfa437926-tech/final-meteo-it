@@ -107,13 +107,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ...documents.map((document) {
         final data = document.data();
         return [
-          document.id,
-          _categoryLabel(data['category'] as String? ?? 'other'),
-          data['brand'] ?? '',
-          data['model'] ?? '',
-          data['serialNumber'] ?? '',
-          _statusLabel(data['status'] as String? ?? 'available'),
-          data['officeName'] ?? '',
+          _safeCell(document.id),
+          _safeCell(_categoryLabel(data['category'] as String? ?? 'other')),
+          _safeCell(data['brand']),
+          _safeCell(data['model']),
+          _safeCell(data['serialNumber']),
+          _safeCell(_statusLabel(data['status'] as String? ?? 'available')),
+          _safeCell(data['officeName']),
         ];
       }),
     ];
