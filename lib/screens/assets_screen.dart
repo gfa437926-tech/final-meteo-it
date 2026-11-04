@@ -102,9 +102,11 @@ class _AssetsScreenState extends State<AssetsScreen> {
     if (confirmed == true && destination != null) {
       try {
         await repository.transferAsset(asset, destination!, notes: notes.text);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم نقل الجهاز إلى ${destination!.name} وتسجيل الحركة')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تم نقل الجهاز إلى ${destination!.name} وتسجيل الحركة')),
+          );
+        }
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر نقل الجهاز: $e')));
       }
