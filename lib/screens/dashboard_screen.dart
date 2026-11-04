@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/screens/offices_screen.dart';
 import 'package:metra_it_assets/screens/assets_screen.dart';
@@ -26,9 +27,28 @@ class DashboardScreen extends StatelessWidget {
         actions: [
           IconButton(onPressed: () {}, tooltip: 'الإشعارات', icon: const Icon(Icons.notifications_none)),
           const Padding(
-            padding: EdgeInsetsDirectional.only(end: 18),
+            padding: EdgeInsetsDirectional.only(end: 4),
             child: CircleAvatar(backgroundColor: Color(0xFFE2F1F1), child: Icon(Icons.person, color: navy)),
           ),
+          IconButton(
+            tooltip: 'تسجيل الخروج',
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('تسجيل الخروج'),
+                  content: const Text('هل تريد إنهاء جلسة العمل الحالية؟'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تسجيل الخروج')),
+                  ],
+                ),
+              );
+              if (confirmed == true) await FirebaseAuth.instance.signOut();
+            },
+            icon: const Icon(Icons.logout),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Row(
