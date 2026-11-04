@@ -39,6 +39,8 @@ class AssetRepository {
     if (!officeSnap.exists || officeSnap.data()?['isActive'] == false) {
       throw StateError('المكتب الوجهة غير موجود أو غير فعال');
     }
+    final officeName = officeSnap.data()?['name'] as String? ?? '';
+    if (officeName.trim().isEmpty) throw StateError('اسم المكتب الوجهة غير صالح');
     final data = assetSnap.data()!;
     final status = data['status'] as String? ?? AssetStatus.available.name;
     if (status != AssetStatus.available.name && status != AssetStatus.returned.name) {
@@ -49,7 +51,7 @@ class AssetRepository {
     if (fromOfficeId == destination.id) throw StateError('الجهاز موجود بالفعل في المكتب المحدد');
     tx.update(assetRef, {
       'officeId': destination.id,
-      'officeName': destination.name,
+      'officeName': officeName,
       'transferredAt': FieldValue.serverTimestamp(),
     });
     final movement = _db.collection('asset_movements').doc();
@@ -61,7 +63,7 @@ class AssetRepository {
       'fromOfficeId': fromOfficeId,
       'fromOfficeName': fromOfficeName,
       'toOfficeId': destination.id,
-      'toOfficeName': destination.name,
+      'toOfficeName': officeName,
       'notes': notes.trim(),
     });
   });
