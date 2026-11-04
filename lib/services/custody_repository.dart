@@ -172,4 +172,71 @@ class CustodyRepository {
           'notes': record.notes.trim(),
         });
       });
+
+  Future<void> transferCustody(
+    CustodyRecord record, {
+    required String newEmployeeName,
+    required String newOfficeName,
+    String notes = '',
+  }) =>
+      db.runTransaction((transaction) async {
+        final employeeName = newEmployeeName.trim();
+        final officeName = newOfficeName.trim();
+        if (employeeName.isEmpty || officeName.isEmpty) {
+          throw ArgumentError('اسم الموظف والمكتب الجديدان مطلوبان');
+        }
+
+        final cardRef = ref.doc(record.id);
+        final cardSnapshot = await transaction.get(cardRef);
+        if (!cardSnapshot.exists) {
+          throw StateError('بطاقة العهدة غير موجودة');
+        }
+        final cardData = cardSnapshot.data()!;
+        if ((cardData['status'] ?? 'active') != 'active') {
+          throw StateError('لا يمكن نقل بطاقة عهدة مغلقة');
+        }
+
+        final assetId = cardData['assetId'] as String? ?? '';
+        if (assetId.isEmpty) {
+          throw StateError('بطاقة العهدة لا تحتوي على معرّف أصل صالح');
+        }
+        final assetRef = db.collection('assets').doc(assetId);
+        final assetSnapshot = await transaction.get(assetRef);
+        if (!assetSnapshot.exists) {
+          throw StateError('الأصل المرتبط غير موجود');
+        }
+        final assetData = assetSnapshot.data()!;
+        if (assetData['status'] != 'assigned') {
+          throw StateError('حالة الأصل لا تسمح بنقل العهدة');
+        }
+
+        final previousEmployee = cardData['employeeName'] as String? ?? '';
+        final previousOffice = cardData['officeName'] as String? ?? '';
+        final brand = assetData['brand'] as String? ?? '';
+        final model = assetData['model'] as String? ?? '';
+        final assetLabel = '$brand $model'.trim();
+        final now = DateTime.now().toIso8601String();
+
+        transaction.update(cardRef, {
+          'employeeName': employeeName,
+          'officeName': officeName,
+          'transferredAt': now,
+        });
+        transaction.update(assetRef, {'officeName': officeName});
+
+        final movementRef = db.collection('asset_movements').doc();
+        transaction.set(movementRef, {
+          'assetId': assetId,
+          'assetLabel': assetLabel,
+          'movementType': 'custody_transferred',
+          'fromEmployee': previousEmployee,
+          'toEmployee': employeeName,
+          'fromOffice': previousOffice,
+          'toOffice': officeName,
+          'occurredAt': now,
+          'custodyId': record.id,
+          'notes': notes.trim(),
+        });
+      });
+
 }
