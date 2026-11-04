@@ -30,7 +30,8 @@
 - [x] Add transactional custody return, asset status restoration, and movement history
 - [x] Add transactional asset transfer between active offices with movement audit
 - [x] Add transactional custody transfer between employees with movement audit
-- [ ] Add printable custody forms and approval flow
+- [x] Add transactional custody approval/rejection, approver audit fields, and asset release on rejection
+- [ ] Add printable custody forms
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
 - [x] Add chronological asset movement history screen
