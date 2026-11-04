@@ -41,5 +41,7 @@
 - [ ] Add Firebase Emulator security tests and backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
 
+- [ ] Add downloadable Excel/PDF report files and filtered office/asset reports
+
 ## Release gate
 The app is not production-ready until Firebase is configured, authorization rules are tested, CI passes on the final commit, and a release build is installed and verified on target devices.
