@@ -67,17 +67,28 @@ service cloud.firestore {
         request.resource.data.displayName is string &&
         request.resource.data.email is string &&
         request.resource.data.role in ['admin', 'it_manager'] &&
-        request.resource.data.isActive is bool;
+        request.resource.data.isActive is bool &&
+        request.resource.data.createdAt is timestamp &&
+        (!request.resource.data.keys().hasAny(['updatedAt']) ||
+          request.resource.data.updatedAt is timestamp);
       allow update: if (isSuperAdmin() && request.auth.uid != uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['displayName', 'email', 'role', 'isActive', 'updatedAt']) &&
           request.resource.data.role in ['admin', 'it_manager'] &&
           request.resource.data.isActive is bool &&
           request.resource.data.displayName is string &&
-          request.resource.data.email is string) ||
+          request.resource.data.email is string &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+            request.resource.data.updatedAt is timestamp)) ||
         (signedIn() && request.auth.uid == uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'email', 'updatedAt']));
+            .hasOnly(['displayName', 'email', 'updatedAt']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName']) ||
+            request.resource.data.displayName is string) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) ||
+            request.resource.data.email is string) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+            request.resource.data.updatedAt is timestamp));
       allow delete: if false;
     }
     match /offices/{officeId} {
