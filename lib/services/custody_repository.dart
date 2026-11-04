@@ -10,5 +10,18 @@ class CustodyRepository {
  final FirebaseFirestore db;
  CollectionReference<Map<String,dynamic>> get ref=>db.collection('custody_cards');
  Stream<List<CustodyRecord>> watch()=>ref.orderBy('assignedAt',descending:true).snapshots().map((s)=>s.docs.map((d)=>CustodyRecord.fromMap(d.id,d.data())).toList());
+ Future<void> returnAsset(CustodyRecord r) => db.runTransaction((tx) async {
+  final card = ref.doc(r.id);
+  final cardSnap = await tx.get(card);
+  if (!cardSnap.exists) throw StateError('بطاقة العهدة غير موجودة');
+  if ((cardSnap.data()?['status'] ?? 'active') != 'active') throw StateError('بطاقة العهدة مغلقة مسبقاً');
+  final asset = db.collection('assets').doc(r.assetId);
+  final assetSnap = await tx.get(asset);
+  if (!assetSnap.exists) throw StateError('الأصل المرتبط غير موجود');
+  tx.update(card, {'status':'returned','returnedAt':DateTime.now().toIso8601String()});
+  tx.update(asset, {'status':'available'});
+  final movement = db.collection('asset_movements').doc();
+  tx.set(movement, {'assetId':r.assetId,'assetLabel':r.assetLabel,'movementType':'returned','fromEmployee':r.employeeName,'occurredAt':DateTime.now().toIso8601String(),'custodyId':r.id,'notes':'إرجاع من العهدة'});
+ });
  Future<void> add(CustodyRecord r)=>db.runTransaction((tx)async{final asset=db.collection('assets').doc(r.assetId);final snap=await tx.get(asset);if(!snap.exists)throw StateError('الأصل المحدد غير موجود');tx.set(ref.doc(r.id),r.toMap());tx.update(asset,{'status':'assigned','officeName':r.officeName});final movement=db.collection('asset_movements').doc();tx.set(movement,{'assetId':r.assetId,'assetLabel':r.assetLabel,'movementType':'assigned','toEmployee':r.employeeName,'toOffice':r.officeName,'occurredAt':r.assignedAt.toIso8601String(),'custodyId':r.id,'notes':r.notes});});
 }
