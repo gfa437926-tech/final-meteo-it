@@ -177,6 +177,8 @@ class _LiveActivityFeed extends StatelessWidget {
                 'returned' => 'إرجاع جهاز',
                 'transferred' => 'نقل بين المكاتب',
                 'custody_transferred' => 'نقل عهدة لموظف',
+                'custody_approved' => 'اعتماد بطاقة عهدة',
+                'custody_rejected' => 'رفض بطاقة عهدة',
                 'retired' => 'استبعاد أصل',
                 'maintenance_opened' => 'إرسال للصيانة',
                 'maintenance_completed' => 'إنهاء الصيانة',
