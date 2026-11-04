@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/screens/offices_screen.dart';
+import 'package:metra_it_assets/screens/assets_screen.dart';
+import 'package:metra_it_assets/screens/custody_screen.dart';
+import 'package:metra_it_assets/screens/reports_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -97,12 +101,12 @@ class _SideNavigation extends StatelessWidget {
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Padding(padding: EdgeInsets.all(12), child: Text('إدارة الأصول', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold))),
       _NavItem(icon: Icons.dashboard_outlined, label: 'لوحة التحكم', selected: true),
-      _NavItem(icon: Icons.business_outlined, label: 'المكاتب'),
-      _NavItem(icon: Icons.devices_outlined, label: 'الأجهزة والجرد'),
-      _NavItem(icon: Icons.assignment_outlined, label: 'بطاقات العهدة'),
+      _NavItem(icon: Icons.business_outlined, label: 'المكاتب', destination: const OfficesScreen()),
+      _NavItem(icon: Icons.devices_outlined, label: 'الأجهزة والجرد', destination: const AssetsScreen()),
+      _NavItem(icon: Icons.assignment_outlined, label: 'بطاقات العهدة', destination: const CustodyScreen()),
       _NavItem(icon: Icons.swap_horiz, label: 'حركة الأجهزة'),
       _NavItem(icon: Icons.build_outlined, label: 'الصيانة'),
-      _NavItem(icon: Icons.analytics_outlined, label: 'التقارير'),
+      _NavItem(icon: Icons.analytics_outlined, label: 'التقارير', destination: const ReportsScreen()),
       const Spacer(),
       _NavItem(icon: Icons.settings_outlined, label: 'الإعدادات'),
     ]),
@@ -110,8 +114,8 @@ class _SideNavigation extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label, this.selected = false});
-  final IconData icon; final String label; final bool selected;
+  const _NavItem({required this.icon, required this.label, this.selected = false, this.destination});
+  final IconData icon; final String label; final bool selected; final Widget? destination;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
@@ -119,7 +123,7 @@ class _NavItem extends StatelessWidget {
       dense: true, selected: selected, selectedTileColor: Colors.white.withValues(alpha: .13),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       leading: Icon(icon, color: Colors.white70), title: Text(label, style: const TextStyle(color: Colors.white)),
-      onTap: () {},
+      onTap: destination == null ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => destination!)),
     ),
   );
 }
