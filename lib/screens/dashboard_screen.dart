@@ -5,6 +5,7 @@ import 'package:metra_it_assets/screens/assets_screen.dart';
 import 'package:metra_it_assets/screens/custody_screen.dart';
 import 'package:metra_it_assets/screens/reports_screen.dart';
 import 'package:metra_it_assets/screens/maintenance_screen.dart';
+import 'package:metra_it_assets/screens/asset_movements_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -105,7 +106,7 @@ class _SideNavigation extends StatelessWidget {
       _NavItem(icon: Icons.business_outlined, label: 'المكاتب', destination: const OfficesScreen()),
       _NavItem(icon: Icons.devices_outlined, label: 'الأجهزة والجرد', destination: const AssetsScreen()),
       _NavItem(icon: Icons.assignment_outlined, label: 'بطاقات العهدة', destination: const CustodyScreen()),
-      _NavItem(icon: Icons.swap_horiz, label: 'حركة الأجهزة'),
+      _NavItem(icon: Icons.swap_horiz, label: 'حركة الأجهزة', destination: const AssetMovementsScreen()),
       _NavItem(icon: Icons.build_outlined, label: 'الصيانة', destination: const MaintenanceScreen()),
       _NavItem(icon: Icons.analytics_outlined, label: 'التقارير', destination: const ReportsScreen()),
       const Spacer(),
