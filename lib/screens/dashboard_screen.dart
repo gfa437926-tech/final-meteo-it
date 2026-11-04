@@ -251,7 +251,22 @@ class _SideNavigation extends StatelessWidget {
       _NavItem(icon: Icons.swap_horiz, label: 'حركة الأجهزة', destination: const AssetMovementsScreen()),
       _NavItem(icon: Icons.build_outlined, label: 'الصيانة', destination: const MaintenanceScreen()),
       _NavItem(icon: Icons.analytics_outlined, label: 'التقارير', destination: const ReportsScreen()),
-      _NavItem(icon: Icons.manage_accounts_outlined, label: 'المستخدمون والصلاحيات', destination: const UserManagementScreen()),
+      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(FirebaseAuth.instance.currentUser?.uid)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.data?.data()?['role'] != 'admin') {
+            return const SizedBox.shrink();
+          }
+          return const _NavItem(
+            icon: Icons.manage_accounts_outlined,
+            label: 'المستخدمون والصلاحيات',
+            destination: UserManagementScreen(),
+          );
+        },
+      ),
       const Spacer(),
       _NavItem(icon: Icons.settings_outlined, label: 'الإعدادات'),
     ]),
