@@ -42,13 +42,13 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
       child: Padding(padding: const EdgeInsets.all(24), child: Form(key: formKey, child: ListView(shrinkWrap: true, children: [
         const Text('بيانات الجهاز', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 20),
-        DropdownButtonFormField<AssetCategory>(value: category, decoration: const InputDecoration(labelText: 'نوع الجهاز'),
+        DropdownButtonFormField<AssetCategory>(initialValue: category, decoration: const InputDecoration(labelText: 'نوع الجهاز'),
           items: AssetCategory.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>category=v!)),
         const SizedBox(height: 14),
         _field(brand, 'الشركة المصنعة', required: true),
         _field(model, 'الموديل', required: true),
         _field(serial, 'الرقم التسلسلي'),
-        DropdownButtonFormField<AssetStatus>(value: status, decoration: const InputDecoration(labelText: 'حالة الجهاز'),
+        DropdownButtonFormField<AssetStatus>(initialValue: status, decoration: const InputDecoration(labelText: 'حالة الجهاز'),
           items: AssetStatus.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>status=v!)),
         if (category == AssetCategory.laptop || category == AssetCategory.desktop) ...[
           _field(cpu, 'المعالج'), _field(ram, 'الذاكرة RAM'), _field(storage, 'التخزين'),
@@ -56,7 +56,7 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
         const SizedBox(height: 20),
         FilledButton.icon(onPressed: saving ? null : save, icon: saving ? const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.save_outlined),
           label: Text(saving ? 'جارٍ الحفظ...' : 'حفظ الجهاز')),
-      ]))),
+      ])))),
     )),
   );
   Widget _field(TextEditingController c, String label, {bool required = false}) => Padding(
