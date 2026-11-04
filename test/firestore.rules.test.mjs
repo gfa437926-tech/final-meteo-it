@@ -13,7 +13,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getBytes } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 let env;
 
@@ -151,6 +151,12 @@ test('active users can read private asset attachments', async () => {
   }));
   const activeStorage = env.authenticatedContext('manager-1').storage();
   await assertSucceeds(getBytes(storageRef(activeStorage, 'asset_documents/asset-1/sample.pdf')));
+  const inactiveStorage = env.authenticatedContext('inactive-1').storage();
+  await assertFails(getBytes(storageRef(inactiveStorage, 'asset_documents/asset-1/sample.pdf')));
+  await assertFails(uploadBytes(file, new Uint8Array([1, 2]), {
+    contentType: 'application/pdf',
+  }));
+  await assertFails(deleteObject(file));
 });
 
 test('unauthenticated users cannot read asset attachments', async () => {
