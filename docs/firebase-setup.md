@@ -34,6 +34,28 @@ Each document in `assets` contains:
 - optional `cpu`, `ram`, `storage`
 - optional `officeId`, `officeName`, `receivedAt`
 
+## First administrator provisioning
+
+The first administrator must be provisioned through a trusted administrative channel because client-side rules intentionally do not allow an unauthenticated user to grant themselves an administrator role.
+
+1. Enable Email/Password in Firebase Authentication and create the first administrator account in the Firebase Console.
+2. Copy that account's Firebase Authentication UID.
+3. In Firestore, create `users/{UID}` with at least these fields:
+
+```json
+{
+  "displayName": "System Administrator",
+  "email": "admin@example.invalid",
+  "role": "admin",
+  "isActive": true
+}
+```
+
+4. Replace the sample display name and email with the actual account details. Do not use the example address as a real account.
+5. Sign in through the app. Access is denied unless the profile exists, `isActive` is explicitly `true`, and `role` is `admin` or `it_manager`.
+
+Create subsequent Authentication accounts using a trusted Admin SDK/service process, then provision their profile documents. Never embed a service-account key in the Flutter client or commit it to this repository.
+
 ## Important security notes
 
 - Do not commit service-account keys, private keys, or local credential files.
