@@ -20,9 +20,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   String _safeCell(Object? value) {
     final text = value?.toString() ?? '';
-    if (RegExp(r'^\\s*[=+@\\-]').hasMatch(text) ||
-        text.startsWith('\\t') || text.startsWith('\\r')) {
-      return \"'$text\";
+    if (RegExp(r'^\s*[=+\-@]').hasMatch(text) ||
+        text.startsWith('\t') || text.startsWith('\r')) {
+      return "'$text";
     }
     return text;
   }
