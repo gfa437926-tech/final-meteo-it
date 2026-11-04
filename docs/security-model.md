@@ -3,7 +3,7 @@
 ## Authentication and profiles
 
 - Firebase Authentication uses Email/Password.
-- Every authenticated user must have a matching `users/{uid}` Firestore profile with `isActive: true`.
+- Every authenticated user must have a matching `users/{uid}` Firestore profile with `isActive: true`. Firestore rules also enforce this flag on all operational reads and writes; hiding screens in the Flutter UI is not treated as an authorization boundary.
 - The application currently admits only `admin` and `it_manager` roles.
 - A super administrator (`admin`) can create and update profile documents for other Firebase Authentication accounts.
 - The application does not create Authentication accounts or passwords. Create accounts through a trusted Firebase Admin SDK process or the Firebase Console, then register their UID in the application.
@@ -39,3 +39,10 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - Spare-part stock documents may be created and updated only by authorized admin/IT-manager profiles; client deletes are denied.
 - A maintenance-parts usage document is append-only from the client rules perspective. It is created in the same Firestore transaction that decrements stock and adds the consumed parts cost to the open maintenance ticket.
 - Firebase Emulator tests are still required before deploying these rules to a production Firebase project.
+
+
+## Firestore rule hardening
+
+- The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
+- Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
+- Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
