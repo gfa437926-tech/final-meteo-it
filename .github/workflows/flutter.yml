@@ -27,4 +27,4 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm install
-      - run: npx firebase emulators:exec --only firestore --project demo-metra-it-assets "npm run test:rules"
+      - run: npx firebase emulators:exec --only firestore,storage --project demo-metra-it-assets "npm run test:rules"
