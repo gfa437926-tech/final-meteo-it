@@ -49,7 +49,8 @@
 - [ ] Implement Google Sheets import/export with validation, staging preview, idempotent writes, and audit trail
 - [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job (final emulator run pending)
 - [x] Document dedicated Firebase Firestore/Storage backup and restore runbook (execution and restore drills remain operational tasks)
-- [ ] Verify emulator rules suite passes on the latest commit and complete a production backup/restore drill
+- [x] Verify Firestore/Storage Emulator authorization suite in CI, including attachment overwrite/delete denial
+- [ ] Complete a production backup/restore drill
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
 
 ## Release gate
