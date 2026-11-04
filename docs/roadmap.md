@@ -17,7 +17,7 @@
 - [x] GitHub Actions workflow and model tests
 
 ## Remaining before operational pilot
-- [ ] Verify the latest complete CI run (Flutter analyze/tests/build plus Firebase Emulator job) and fix any remaining failures
+- [x] Verify Flutter analyze/tests and Firestore/Storage Emulator authorization CI on commit `d7f2f7f` (workflow run `41935041019`; Android/Windows/Web release builds are tracked separately)
 - [ ] Configure dedicated Firebase project, FlutterFire platform files, and deploy Firestore/Storage rules
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
@@ -47,9 +47,9 @@
 - [x] Add Arabic RTL printable inventory report with filter-aware summaries and browser Print / Save as PDF flow (native embedded-font PDF export remains pending)
 - [x] Define the secure Google Sheets import/export contract and acceptance criteria (implementation remains pending)
 - [ ] Implement Google Sheets import/export with validation, staging preview, idempotent writes, and audit trail
-- [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job (final emulator run pending)
+- [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job
 - [x] Document dedicated Firebase Firestore/Storage backup and restore runbook (execution and restore drills remain operational tasks)
-- [x] Verify Firestore/Storage Emulator authorization suite in CI, including attachment overwrite/delete denial
+- [x] Verify Firestore/Storage Emulator authorization suite in CI, including inactive-user read denial and attachment overwrite/delete denial (run `41935041019`)
 - [ ] Complete a production backup/restore drill
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
 
