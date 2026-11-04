@@ -125,6 +125,24 @@ test('rejection must close the card and release its assigned asset atomically', 
 });
 
 
+test('import batch audit records are append-only and actor-bound', async () => {
+  const db = env.authenticatedContext('admin-1').firestore();
+  await assertFails(setDoc(doc(db, 'import_batches', 'forged'), {
+    createdBy: 'manager-1',
+    status: 'completed',
+    succeededRows: 4,
+  }));
+  await assertSucceeds(setDoc(doc(db, 'import_batches', 'batch-1'), {
+    createdBy: 'admin-1',
+    status: 'completed',
+    succeededRows: 4,
+    failedRows: 0,
+  }));
+  await assertFails(updateDoc(doc(db, 'import_batches', 'batch-1'), {
+    succeededRows: 500,
+  }));
+});
+
 test('active users can read private asset attachments', async () => {
   const adminStorage = env.authenticatedContext('admin-1').storage();
   const file = storageRef(adminStorage, 'asset_documents/asset-1/sample.pdf');
