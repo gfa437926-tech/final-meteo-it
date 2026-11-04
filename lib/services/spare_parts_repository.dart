@@ -80,7 +80,7 @@ class SparePartsRepository {
         'quantity': available - quantity,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      transaction.set(usageRef, {
+      final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;\n      transaction.update(ticketRef, {\n        'partsCost': previousPartsCost + unitCost * quantity,\n        'updatedAt': FieldValue.serverTimestamp(),\n      });\n      transaction.set(usageRef, {
         'partId': partId,
         'partName': partName,
         'maintenanceId': maintenanceId,
