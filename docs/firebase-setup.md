@@ -74,3 +74,9 @@ The asset scanner uses the `mobile_scanner` package. When generating the native 
 - Web: test from HTTPS or localhost and grant the browser camera permission.
 
 Do not assume that a successful Dart analysis proves camera access or native packaging is configured. Verify scanning on each target platform.
+
+## User management in the application
+
+After the first administrator profile is configured, the super administrator can open **المستخدمون والصلاحيات** from the dashboard. Create the Authentication account first through Firebase Console or a trusted Admin SDK process, then add its UID, display name, email, role, and active state in the application. The app manages Firestore profiles only; it never creates passwords or Firebase Authentication accounts.
+
+Only the `admin` role can create or change other users' profile roles and active state. An account can update only its own display name and email. The `it_manager` role can operate inventory workflows but cannot administer other accounts. See [security-model.md](security-model.md) for the current permission matrix and remaining production limitations.
