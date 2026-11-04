@@ -310,11 +310,3 @@ class _CategoryRow extends StatelessWidget {
   ]));
 }
 
-class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({required this.icon, required this.text});
-  final IconData icon; final String text;
-  @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(children: [
-    Icon(icon, size: 18, color: DashboardScreen.teal), const SizedBox(width: 10), Expanded(child: Text(text)),
-  ]));
-}
