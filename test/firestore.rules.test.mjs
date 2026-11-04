@@ -77,7 +77,7 @@ test('users cannot elevate their own role', async () => {
 test('only a super administrator can provision another user profile', async () => {
   const managerDb = env.authenticatedContext('manager-1').firestore();
   await assertFails(setDoc(doc(managerDb, 'users', 'new-user'), {
-    role: 'it_manager', isActive: true, displayName: 'New User',
+    role: 'it_manager', isActive: true, displayName: 'New User', email: 'new@example.com', createdAt: 1,
   }));
 
   const adminDb = env.authenticatedContext('admin-1').firestore();
@@ -206,5 +206,31 @@ test('storage uploads reject unsupported content types', async () => {
   const file = storageRef(adminStorage, 'asset_documents/asset-1/malware.exe');
   await assertFails(uploadBytes(file, new Uint8Array([1, 2, 3]), {
     contentType: 'application/x-msdownload',
+  }));
+});
+
+
+test('user profile creation rejects unsupported roles and unexpected fields', async () => {
+  const db = env.authenticatedContext('admin-1').firestore();
+  await assertFails(setDoc(doc(db, 'users', 'bad-role'), {
+    role: 'superuser', isActive: true, displayName: 'Bad Role',
+    email: 'bad@example.com', createdAt: 1,
+  }));
+  await assertFails(setDoc(doc(db, 'users', 'extra-field'), {
+    role: 'it_manager', isActive: true, displayName: 'Extra Field',
+    email: 'extra@example.com', createdAt: 1, password: 'must-not-be-stored',
+  }));
+});
+
+test('administrator profile updates reject unexpected privilege fields', async () => {
+  const db = env.authenticatedContext('admin-1').firestore();
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    role: 'it_manager', isActive: true, isRoot: true,
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    role: 'superuser',
+  }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'manager-1'), {
+    displayName: 'Updated Manager', role: 'it_manager', isActive: true,
   }));
 });
