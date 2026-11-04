@@ -15,6 +15,7 @@ class AssetDocumentsScreen extends StatefulWidget {
 
 class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
   String? selectedAssetId;
+  String documentType = 'other';
   bool uploading = false;
 
   String _contentType(String extension) => switch (extension.toLowerCase()) {
@@ -71,6 +72,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
         'contentType': _contentType(extension),
         'sizeBytes': file.size,
         'uploadedBy': uid,
+        'documentType': documentType,
         'createdAt': FieldValue.serverTimestamp(),
       });
       _message('تم رفع المستند وربطه بالأصل');
@@ -153,6 +155,27 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                 },
               ),
             ),
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+              child: DropdownButtonFormField<String>(
+                initialValue: documentType,
+                decoration: const InputDecoration(
+                  labelText: 'نوع المستند',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'invoice', child: Text('فاتورة شراء')),
+                  DropdownMenuItem(value: 'warranty', child: Text('كفالة / ضمان')),
+                  DropdownMenuItem(value: 'handover', child: Text('محضر تسليم أو استلام')),
+                  DropdownMenuItem(value: 'maintenance', child: Text('مستند صيانة')),
+                  DropdownMenuItem(value: 'photo', child: Text('صورة الجهاز')),
+                  DropdownMenuItem(value: 'other', child: Text('مستند آخر')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => documentType = value);
+                },
+              ),
+            ),
             Expanded(
               child: selectedAssetId == null
                   ? const Center(child: Text('اختر أصلاً لعرض مستنداته'))
@@ -185,7 +208,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                               child: ListTile(
                                 leading: const CircleAvatar(child: Icon(Icons.description_outlined)),
                                 title: Text(data['fileName'] as String? ?? 'مستند'),
-                                subtitle: Text('${(size / 1024).toStringAsFixed(2)} MB'),
+                                subtitle: Text('${switch (data['documentType'] as String? ?? 'other') {\n                                  'invoice' => 'فاتورة شراء',\n                                  'warranty' => 'كفالة / ضمان',\n                                  'handover' => 'محضر تسليم أو استلام',\n                                  'maintenance' => 'مستند صيانة',\n                                  'photo' => 'صورة الجهاز',\n                                  _ => 'مستند آخر',\n                                }} • ${(size / 1024).toStringAsFixed(2)} MB'),
                                 trailing: IconButton(
                                   tooltip: 'تنزيل أو مشاركة المستند',
                                   icon: const Icon(Icons.download_outlined),
