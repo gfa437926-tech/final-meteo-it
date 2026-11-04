@@ -127,7 +127,8 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                                               'فتح الطلب: ${DateFormat('yyyy/MM/dd').format(reported)}'
                                               '${completed.year > 2000 ? '\nالإغلاق: ${DateFormat('yyyy/MM/dd').format(completed)}' : ''}'
                                               '\nالفني: ${data['technician'] ?? 'غير محدد'}'
-                                              '\nتكلفة الصيانة: ${NumberFormat('#,##0.##').format(cost)}'\n                                              '\nقطع الغيار: ${NumberFormat('#,##0.##').format(partsCost)}'
+                                              '\nتكلفة الصيانة: ${NumberFormat('#,##0.##').format(cost)}'
+                                              '\nقطع الغيار: ${NumberFormat('#,##0.##').format(partsCost)}'
                                               '${(data['resolution'] as String? ?? '').trim().isEmpty ? '' : '\nالحل: ${data['resolution']}'}',
                                             ),
                                           ),
