@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:metra_it_assets/models/purchase_record.dart';
 import 'package:metra_it_assets/services/purchase_repository.dart';
@@ -15,6 +17,93 @@ class PurchasesScreen extends StatefulWidget {
 class _PurchasesScreenState extends State<PurchasesScreen> {
   final repository = PurchaseRepository();
   final dateFormat = DateFormat('yyyy/MM/dd');
+
+  Future<void> _showPurchaseDetails(PurchaseRecord record) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تفاصيل فاتورة الشراء'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _detailLine('الأصل', record.assetLabel),
+                _detailLine('المورد', record.supplier),
+                _detailLine('رقم الفاتورة', record.invoiceNumber.isEmpty ? 'غير محدد' : record.invoiceNumber),
+                _detailLine('تاريخ الشراء', dateFormat.format(record.purchaseDate)),
+                _detailLine('قيمة الشراء', record.totalCost.toStringAsFixed(2)),
+                _detailLine('الضمان', record.warrantyUntil == null ? 'غير محدد' : dateFormat.format(record.warrantyUntil!)),
+                if (record.notes.trim().isNotEmpty) _detailLine('ملاحظات', record.notes),
+                const Divider(height: 28),
+                const Text('المرفقات المرتبطة', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance.collection('asset_documents')
+                      .where('purchaseRecordId', isEqualTo: record.id).snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) return Text('تعذر تحميل المرفقات: ${snapshot.error}');
+                    if (!snapshot.hasData) return const LinearProgressIndicator();
+                    final attachments = snapshot.data!.docs;
+                    if (attachments.isEmpty) return const Text('لا توجد فاتورة أو وثيقة مرفقة بهذا السجل');
+                    return Column(
+                      children: attachments.map((document) {
+                        final data = document.data();
+                        final name = data['fileName'] as String? ?? 'مرفق';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.attach_file),
+                          title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          trailing: IconButton(
+                            tooltip: 'مشاركة / تنزيل',
+                            icon: const Icon(Icons.download_outlined),
+                            onPressed: () async {
+                              try {
+                                final path = data['storagePath'] as String? ?? '';
+                                if (path.isEmpty) throw StateError('مسار الملف غير موجود');
+                                final bytes = await FirebaseStorage.instance.ref(path).getData(10 * 1024 * 1024);
+                                if (bytes == null || bytes.isEmpty) throw StateError('تعذر قراءة الملف');
+                                await Share.shareXFiles([
+                                  XFile.fromData(bytes, name: name,
+                                    mimeType: data['contentType'] as String? ?? 'application/octet-stream'),
+                                ], text: 'مرفق فاتورة شراء');
+                              } catch (error) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('تعذرت مشاركة المرفق: $error')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إغلاق')),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailLine(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 125, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+            Expanded(child: Text(value)),
+          ],
+        ),
+      );
 
   Future<void> _addPurchase() async {
     final formKey = GlobalKey<FormState>();
@@ -235,6 +324,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                     : 'الضمان حتى ${dateFormat.format(warranty)}';
                 return Card(
                   child: ListTile(
+                    onTap: () => _showPurchaseDetails(record),
                     leading: const CircleAvatar(
                       child: Icon(Icons.receipt_long_outlined),
                     ),
