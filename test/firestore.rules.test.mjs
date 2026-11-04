@@ -12,10 +12,8 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
-  ref as storageRef,
-  uploadBytes,
-  getBytes,
 } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getBytes } from 'firebase/storage';
 
 let env;
 
