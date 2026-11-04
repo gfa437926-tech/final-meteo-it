@@ -28,9 +28,9 @@ class _AssetsScreenState extends State<AssetsScreen> {
       Wrap(spacing: 12, runSpacing: 12, children: [
         SizedBox(width: 280, child: TextField(controller: search, onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'بحث بالاسم أو الموديل أو الرقم التسلسلي'))),
-        SizedBox(width: 220, child: DropdownButtonFormField<AssetCategory>(value: category, decoration: const InputDecoration(labelText: 'التصنيف'),
+        SizedBox(width: 220, child: DropdownButtonFormField<AssetCategory>(initialValue: category, decoration: const InputDecoration(labelText: 'التصنيف'),
           items: AssetCategory.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>category=v))),
-        SizedBox(width: 220, child: DropdownButtonFormField<AssetStatus>(value: status, decoration: const InputDecoration(labelText: 'الحالة'),
+        SizedBox(width: 220, child: DropdownButtonFormField<AssetStatus>(initialValue: status, decoration: const InputDecoration(labelText: 'الحالة'),
           items: AssetStatus.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>status=v))),
       ]),
       const SizedBox(height: 18),
