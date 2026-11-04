@@ -18,6 +18,43 @@ service cloud.firestore {
       return isActiveUser() && userDoc().role == 'admin';
     }
 
+    function custodyUpdateAllowed() {
+      let approvalBefore = resource.data.get('approvalStatus', 'approved');
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let assetId = resource.data.assetId;
+      let assetAfter = getAfter(/databases/$(database)/documents/assets/$(assetId)).data;
+      return isAdmin() && (
+        (
+          approvalBefore == 'pending' &&
+          request.resource.data.approvalStatus == 'approved' &&
+          request.resource.data.approvedBy == request.auth.uid &&
+          changed.hasOnly(['approvalStatus', 'approvedBy', 'approvedAt'])
+        ) ||
+        (
+          approvalBefore == 'pending' &&
+          request.resource.data.approvalStatus == 'rejected' &&
+          request.resource.data.status == 'rejected' &&
+          request.resource.data.rejectedBy == request.auth.uid &&
+          changed.hasOnly(['approvalStatus', 'status', 'rejectedBy', 'rejectedAt', 'rejectionReason']) &&
+          assetAfter.status == 'available'
+        ) ||
+        (
+          approvalBefore == 'approved' &&
+          resource.data.status == 'active' &&
+          request.resource.data.status == 'returned' &&
+          changed.hasOnly(['status', 'returnedAt']) &&
+          assetAfter.status == 'available'
+        ) ||
+        (
+          approvalBefore == 'approved' &&
+          resource.data.status == 'active' &&
+          request.resource.data.status == 'active' &&
+          changed.hasOnly(['employeeName', 'officeName', 'transferredAt']) &&
+          assetAfter.officeName == request.resource.data.officeName
+        )
+      );
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if isSuperAdmin() && request.auth.uid != uid;
@@ -43,7 +80,11 @@ service cloud.firestore {
     }
     match /custody_cards/{cardId} {
       allow read: if isActiveUser();
-      allow create, update: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.approvalStatus == 'pending' &&
+        getAfter(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.status == 'assigned';
+      allow update: if custodyUpdateAllowed();
       allow delete: if false;
     }
     match /asset_documents/{documentId} {
