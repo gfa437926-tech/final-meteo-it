@@ -85,20 +85,14 @@ class DashboardScreen extends StatelessWidget {
                           flex: twoColumns ? 2 : 0,
                           child: _Panel(
                             title: 'آخر النشاطات',
-                            child: const Column(children: [
-                              _ActivityRow(icon: Icons.add_box_outlined, text: 'لا توجد عمليات مسجلة بعد'),
-                              Divider(),
-                              _ActivityRow(icon: Icons.sync_alt, text: 'ستظهر حركة الأصول هنا'),
-                              Divider(),
-                              _ActivityRow(icon: Icons.build_outlined, text: 'ستظهر طلبات الصيانة هنا'),
-                            ]),
+                            child: const _LiveActivityFeed(),
                           ),
                         ),
                       ],
                     );
                   }),
                   const SizedBox(height: 20),
-                  const _Panel(title: 'تنبيه', child: Text('هذه نسخة تأسيسية. الأرقام صفر حتى ربط قاعدة البيانات وإدخال الأصول الفعلية.')),
+                  const _Panel(title: 'تنبيه', child: Text('تُحدّث مؤشرات الأصول والمكاتب تلقائياً من قاعدة البيانات عند توفر الاتصال.')),
                 ],
               ),
             ),
@@ -141,6 +135,74 @@ class _LiveMetrics extends StatelessWidget {
                 ],
               );
             },
+          );
+        },
+      );
+}
+
+
+class _LiveActivityFeed extends StatelessWidget {
+  const _LiveActivityFeed();
+
+  @override
+  Widget build(BuildContext context) =>
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('asset_movements')
+            .orderBy('occurredAt', descending: true)
+            .limit(5)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('تعذر تحميل سجل النشاطات');
+          }
+          if (!snapshot.hasData) {
+            return const LinearProgressIndicator();
+          }
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return const Text('لا توجد عمليات مسجلة بعد');
+          }
+          return Column(
+            children: docs.map((doc) {
+              final data = doc.data();
+              final type = data['movementType'] as String? ?? '';
+              final label = switch (type) {
+                'assigned' => 'تسليم عهدة',
+                'returned' => 'إرجاع جهاز',
+                'transferred' => 'نقل بين المكاتب',
+                'custody_transferred' => 'نقل عهدة لموظف',
+                'retired' => 'استبعاد أصل',
+                'maintenance_started' => 'إرسال للصيانة',
+                'maintenance_completed' => 'إنهاء الصيانة',
+                _ => 'حركة أصل',
+              };
+              final asset = data['assetLabel'] as String? ?? 'جهاز';
+              final employee = data['toEmployee'] as String? ??
+                  data['fromEmployee'] as String? ??
+                  '';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history, size: 18, color: DashboardScreen.teal),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          Text(
+                            employee.isEmpty ? asset : '$asset • $employee',
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           );
         },
       );
