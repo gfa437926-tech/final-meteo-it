@@ -10,6 +10,7 @@ class CustodyRecord {
     required this.assignedAt,
     this.notes = '',
     this.status = 'active',
+    this.approvalStatus = 'approved',
   });
 
   final String id;
@@ -19,6 +20,7 @@ class CustodyRecord {
   final String officeName;
   final String notes;
   final String status;
+  final String approvalStatus;
   final DateTime assignedAt;
 
   Map<String, Object?> toMap() => {
@@ -29,6 +31,7 @@ class CustodyRecord {
         'assignedAt': assignedAt.toIso8601String(),
         'notes': notes.trim(),
         'status': status,
+        'approvalStatus': approvalStatus,
       };
 
   factory CustodyRecord.fromMap(String id, Map<String, dynamic> map) =>
@@ -42,6 +45,7 @@ class CustodyRecord {
             DateTime.now(),
         notes: map['notes'] as String? ?? '',
         status: map['status'] as String? ?? 'active',
+        approvalStatus: map['approvalStatus'] as String? ?? 'approved',
       );
 }
 
@@ -72,6 +76,9 @@ class CustodyRepository {
         final cardData = cardSnapshot.data()!;
         if ((cardData['status'] ?? 'active') != 'active') {
           throw StateError('بطاقة العهدة مغلقة مسبقاً');
+        }
+        if ((cardData['approvalStatus'] ?? 'approved') != 'approved') {
+          throw StateError('لا يمكن إرجاع عهدة قبل اعتمادها');
         }
 
         // Use the persisted card as the source of truth, not client-supplied
@@ -154,6 +161,7 @@ class CustodyRepository {
           'employeeName': employeeName,
           'officeName': officeName,
           'status': 'active',
+          'approvalStatus': 'pending',
         });
         transaction.update(assetRef, {
           'status': 'assigned',
@@ -170,6 +178,76 @@ class CustodyRepository {
           'occurredAt': now,
           'custodyId': record.id,
           'notes': record.notes.trim(),
+        });
+      });
+
+  Future<void> approveCustody(CustodyRecord record, {required String approverUid}) =>
+      db.runTransaction((transaction) async {
+        final cardRef = ref.doc(record.id);
+        final snapshot = await transaction.get(cardRef);
+        if (!snapshot.exists) throw StateError('بطاقة العهدة غير موجودة');
+        final data = snapshot.data()!;
+        if ((data['status'] ?? 'active') != 'active' ||
+            (data['approvalStatus'] ?? 'approved') != 'pending') {
+          throw StateError('بطاقة العهدة ليست بانتظار الاعتماد');
+        }
+        transaction.update(cardRef, {
+          'approvalStatus': 'approved',
+          'approvedBy': approverUid,
+          'approvedAt': FieldValue.serverTimestamp(),
+        });
+        final movement = db.collection('asset_movements').doc();
+        transaction.set(movement, {
+          'assetId': data['assetId'],
+          'assetLabel': data['assetLabel'],
+          'movementType': 'custody_approved',
+          'toEmployee': data['employeeName'],
+          'toOffice': data['officeName'],
+          'occurredAt': DateTime.now().toIso8601String(),
+          'custodyId': record.id,
+          'notes': 'اعتماد بطاقة العهدة',
+        });
+      });
+
+  Future<void> rejectCustody(CustodyRecord record, {
+    required String approverUid,
+    String reason = '',
+  }) =>
+      db.runTransaction((transaction) async {
+        final cardRef = ref.doc(record.id);
+        final snapshot = await transaction.get(cardRef);
+        if (!snapshot.exists) throw StateError('بطاقة العهدة غير موجودة');
+        final data = snapshot.data()!;
+        if ((data['status'] ?? 'active') != 'active' ||
+            (data['approvalStatus'] ?? 'approved') != 'pending') {
+          throw StateError('بطاقة العهدة ليست بانتظار الاعتماد');
+        }
+        final assetId = data['assetId'] as String? ?? '';
+        if (assetId.isEmpty) throw StateError('معرّف الأصل غير صالح');
+        final assetRef = db.collection('assets').doc(assetId);
+        final assetSnapshot = await transaction.get(assetRef);
+        if (!assetSnapshot.exists) throw StateError('الأصل المرتبط غير موجود');
+        if (assetSnapshot.data()?['status'] != 'assigned') {
+          throw StateError('حالة الأصل لا تسمح برفض العهدة');
+        }
+        final now = DateTime.now().toIso8601String();
+        transaction.update(cardRef, {
+          'status': 'rejected',
+          'approvalStatus': 'rejected',
+          'rejectedBy': approverUid,
+          'rejectedAt': now,
+          'rejectionReason': reason.trim(),
+        });
+        transaction.update(assetRef, {'status': 'available'});
+        final movement = db.collection('asset_movements').doc();
+        transaction.set(movement, {
+          'assetId': assetId,
+          'assetLabel': data['assetLabel'],
+          'movementType': 'custody_rejected',
+          'fromEmployee': data['employeeName'],
+          'occurredAt': now,
+          'custodyId': record.id,
+          'notes': reason.trim().isEmpty ? 'رفض بطاقة العهدة' : reason.trim(),
         });
       });
 
@@ -194,6 +272,9 @@ class CustodyRepository {
         final cardData = cardSnapshot.data()!;
         if ((cardData['status'] ?? 'active') != 'active') {
           throw StateError('لا يمكن نقل بطاقة عهدة مغلقة');
+        }
+        if ((cardData['approvalStatus'] ?? 'approved') != 'approved') {
+          throw StateError('لا يمكن نقل عهدة قبل اعتمادها');
         }
 
         final assetId = cardData['assetId'] as String? ?? '';
