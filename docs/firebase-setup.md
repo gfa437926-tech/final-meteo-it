@@ -62,7 +62,8 @@ Create subsequent Authentication accounts using a trusted Admin SDK/service proc
 - Configure Firebase Authentication before granting access to staff.
 - Review and test Firestore rules with the Firebase Emulator before production.
 - The current rules are a starter baseline, not a completed authorization model. Add role and office-level access checks before operational deployment.
-- Asset serial numbers are reserved transactionally in `asset_serials/{encodedNormalizedSerial}`. Firestore rules restrict this reservation index to active administrators/IT managers. Before opening the transaction, the app performs a compatibility scan of existing asset records to detect legacy serials that predate the index; this scan is O(number of assets), so a controlled one-time backfill of `asset_serials` should be completed before a large inventory rollout. The unique reservation itself is then checked and written atomically with the asset record.\n- Keep serial reservation and asset create/update in the same Firestore transaction. Do not write asset records directly from scripts or alternate clients without maintaining the reservation index.
+- Asset serial numbers are reserved transactionally in `asset_serials/{encodedNormalizedSerial}`. Firestore rules restrict this reservation index to active administrators/IT managers. Before opening the transaction, the app performs a compatibility scan of existing asset records to detect legacy serials that predate the index; this scan is O(number of assets), so a controlled one-time backfill of `asset_serials` should be completed before a large inventory rollout. The unique reservation itself is then checked and written atomically with the asset record.
+- Keep serial reservation and asset create/update in the same Firestore transaction. Do not write asset records directly from scripts or alternate clients without maintaining the reservation index.
 
 ## Camera scanning platform permissions
 
