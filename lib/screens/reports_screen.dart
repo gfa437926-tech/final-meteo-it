@@ -16,6 +16,16 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   String? categoryFilter;
   String? statusFilter;
+  String? officeFilter;
+
+  String _safeCell(Object? value) {
+    final text = value?.toString() ?? '';
+    if (RegExp(r'^\\s*[=+@\\-]').hasMatch(text) ||
+        text.startsWith('\\t') || text.startsWith('\\r')) {
+      return \"'$text\";
+    }
+    return text;
+  }
 
   Future<void> _copyCsv(
     BuildContext context,
@@ -26,13 +36,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ...documents.map((document) {
         final data = document.data();
         return [
-          document.id,
-          _categoryLabel(data['category'] as String? ?? 'other'),
-          data['brand'] ?? '',
-          data['model'] ?? '',
-          data['serialNumber'] ?? '',
-          _statusLabel(data['status'] as String? ?? 'available'),
-          data['officeName'] ?? '',
+          _safeCell(document.id),
+          _safeCell(_categoryLabel(data['category'] as String? ?? 'other')),
+          _safeCell(data['brand']),
+          _safeCell(data['model']),
+          _safeCell(data['serialNumber']),
+          _safeCell(_statusLabel(data['status'] as String? ?? 'available')),
+          _safeCell(data['officeName']),
         ];
       }),
     ];
@@ -63,13 +73,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     for (final document in documents) {
       final data = document.data();
       sheet.appendRow([
-        TextCellValue(document.id),
-        TextCellValue(_categoryLabel(data['category'] as String? ?? 'other')),
-        TextCellValue(data['brand']?.toString() ?? ''),
-        TextCellValue(data['model']?.toString() ?? ''),
-        TextCellValue(data['serialNumber']?.toString() ?? ''),
-        TextCellValue(_statusLabel(data['status'] as String? ?? 'available')),
-        TextCellValue(data['officeName']?.toString() ?? ''),
+        TextCellValue(_safeCell(document.id)),
+        TextCellValue(_safeCell(_categoryLabel(data['category'] as String? ?? 'other'))),
+        TextCellValue(_safeCell(data['brand'])),
+        TextCellValue(_safeCell(data['model'])),
+        TextCellValue(_safeCell(data['serialNumber'])),
+        TextCellValue(_safeCell(_statusLabel(data['status'] as String? ?? 'available'))),
+        TextCellValue(_safeCell(data['officeName'])),
       ]);
     }
     final bytes = workbook.encode();
@@ -155,10 +165,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final documents = snapshot.data!.docs.where((document) {
+            final allDocuments = snapshot.data!.docs;
+            final offices = allDocuments
+                .map((document) => (document.data()['officeName'] as String? ?? '').trim())
+                .where((name) => name.isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort();
+            if (officeFilter != null && !offices.contains(officeFilter)) {
+              officeFilter = null;
+            }
+            final documents = allDocuments.where((document) {
               final data = document.data();
               return (categoryFilter == null || data['category'] == categoryFilter) &&
-                  (statusFilter == null || data['status'] == statusFilter);
+                  (statusFilter == null || data['status'] == statusFilter) &&
+                  (officeFilter == null || (data['officeName'] as String? ?? '').trim() == officeFilter);
             }).toList();
             int count(String status) => documents
                 .where((document) => document.data()['status'] == status)
@@ -214,12 +235,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         onChanged: (value) => setState(() => statusFilter = value),
                       ),
                     ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: officeFilter,
+                        decoration: const InputDecoration(labelText: 'تصفية حسب المكتب'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('كل المكاتب')),
+                          ...offices.map((name) => DropdownMenuItem(value: name, child: Text(name))),
+                        ],
+                        onChanged: (value) => setState(() => officeFilter = value),
+                      ),
+                    ),
                     TextButton.icon(
-                      onPressed: categoryFilter == null && statusFilter == null
+                      onPressed: categoryFilter == null && statusFilter == null && officeFilter == null
                           ? null
                           : () => setState(() {
                                 categoryFilter = null;
                                 statusFilter = null;
+                                officeFilter = null;
                               }),
                       icon: const Icon(Icons.filter_alt_off),
                       label: const Text('مسح التصفية'),
