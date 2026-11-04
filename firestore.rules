@@ -47,6 +47,21 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    // Spare-part stock is maintained by authorized inventory administrators.
+    match /spare_parts/{partId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Usage rows are append-only evidence created in the same transaction
+    // that decrements stock and accumulates the maintenance ticket's parts cost.
+    match /maintenance_parts/{usageId} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
     match /{collection}/{document=**} {
       allow read: if signedIn() && collection in [
         'asset_categories', 'asset_models', 'custody_items',
