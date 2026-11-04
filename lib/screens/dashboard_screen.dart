@@ -173,7 +173,7 @@ class _LiveActivityFeed extends StatelessWidget {
                 'transferred' => 'نقل بين المكاتب',
                 'custody_transferred' => 'نقل عهدة لموظف',
                 'retired' => 'استبعاد أصل',
-                'maintenance_started' => 'إرسال للصيانة',
+                'maintenance_opened' => 'إرسال للصيانة',
                 'maintenance_completed' => 'إنهاء الصيانة',
                 _ => 'حركة أصل',
               };
