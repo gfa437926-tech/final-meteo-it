@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/models/office.dart';
@@ -19,6 +22,55 @@ class _AssetsScreenState extends State<AssetsScreen> {
   AssetStatus? status;
   @override
   void dispose() { search.dispose(); super.dispose(); }
+
+  Future<void> _printQrLabel(Asset asset) async {
+    final document = pw.Document();
+    document.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a6,
+        build: (context) => pw.Center(
+          child: pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            children: [
+              pw.Text(
+                'IT ASSET LABEL',
+                style: pw.TextStyle(
+                  fontSize: 15,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 14),
+              pw.BarcodeWidget(
+                barcode: pw.Barcode.qrCode(),
+                data: asset.id,
+                width: 150,
+                height: 150,
+                drawText: false,
+              ),
+              pw.SizedBox(height: 12),
+              pw.Text(
+                'ASSET ID: ${asset.id}',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+              ),
+              if (asset.serialNumber.trim().isNotEmpty) ...[
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'SERIAL: ${asset.serialNumber.trim()}',
+                  textAlign: pw.TextAlign.center,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    await Printing.layoutPdf(
+      onLayout: (_) async => document.save(),
+      name: 'asset-${asset.id}-qr-label.pdf',
+    );
+  }
 
   Future<void> _showQr(Asset asset) async {
     await showDialog<void>(
@@ -53,6 +105,11 @@ class _AssetsScreenState extends State<AssetsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('إغلاق'),
+          ),
+          FilledButton.icon(
+            onPressed: () => _printQrLabel(asset),
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('طباعة الملصق'),
           ),
         ],
       ),
