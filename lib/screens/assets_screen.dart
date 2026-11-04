@@ -16,6 +16,27 @@ class _AssetsScreenState extends State<AssetsScreen> {
   @override
   void dispose() { search.dispose(); super.dispose(); }
 
+  Future<void> _retire(Asset asset) async {
+    final reason = TextEditingController();
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('استبعاد الجهاز من الخدمة'),
+      content: TextField(controller: reason, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'سبب الاستبعاد')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الاستبعاد')),
+      ],
+    ));
+    if (confirmed == true) {
+      try {
+        await repository.retireAsset(asset, reason: reason.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم استبعاد الجهاز مع الاحتفاظ بسجل حركته')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر الاستبعاد: $e')));
+      }
+    }
+    reason.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('الأجهزة والجرد')),
@@ -50,7 +71,20 @@ class _AssetsScreenState extends State<AssetsScreen> {
               leading: const CircleAvatar(child: Icon(Icons.devices_other)),
               title: Text('${a.brand} ${a.model}', style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text('${a.category.label} • الرقم التسلسلي: ${a.serialNumber.isEmpty ? 'غير محدد' : a.serialNumber}'),
-              trailing: Chip(label: Text(a.status.label)),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                Chip(label: Text(a.status.label)),
+                PopupMenuButton<String>(
+                  tooltip: 'إجراءات الجهاز',
+                  onSelected: (v) {
+                    if (v == 'edit') Navigator.push(context, MaterialPageRoute(builder: (_) => AssetFormScreen(initialAsset: a)));
+                    if (v == 'retire') _retire(a);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('تعديل البيانات'))),
+                    if (a.status != AssetStatus.retired) const PopupMenuItem(value: 'retire', child: ListTile(dense: true, leading: Icon(Icons.archive_outlined), title: Text('استبعاد من الخدمة'))),
+                  ],
+                ),
+              ]),
             ); }));
         },
       )),
