@@ -26,6 +26,7 @@
 - [ ] Add custody transfer, printable custody forms, and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
+- [x] Add chronological asset movement history screen
 - [ ] Add service history views and spare-parts records
 - [ ] Add purchase/receipt records, warranties, invoices, and file attachments
 - [ ] Add office/asset reports and Excel/CSV/PDF exports
