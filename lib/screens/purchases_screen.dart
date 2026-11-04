@@ -70,8 +70,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                                     mimeType: data['contentType'] as String? ?? 'application/octet-stream'),
                                 ], text: 'مرفق فاتورة شراء');
                               } catch (error) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                if (dialogContext.mounted) {
+                                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                                     SnackBar(content: Text('تعذرت مشاركة المرفق: $error')),
                                   );
                                 }
