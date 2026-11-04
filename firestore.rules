@@ -2,12 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function isAdmin() { return signedIn() && userDoc().role in ['admin', 'it_manager']; }
+    function userExists() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return userExists() && userDoc().role in ['admin', 'it_manager'];
+    }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
     match /offices/{officeId} {
       allow read: if signedIn();
@@ -19,17 +26,27 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if false;
     }
+    match /custody_cards/{cardId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     match /{collection}/{document=**} {
       allow read: if signedIn() && collection in [
-        'asset_categories', 'asset_models', 'custody_cards', 'custody_items',
+        'asset_categories', 'asset_models', 'custody_items',
         'asset_movements', 'asset_documents', 'maintenance_records',
-        'purchase_records', 'audit_logs'
+        'purchase_records'
       ];
-      allow write: if isAdmin() && collection in [
-        'asset_categories', 'asset_models', 'custody_cards', 'custody_items',
+      allow create, update: if isAdmin() && collection in [
+        'asset_categories', 'asset_models', 'custody_items',
         'asset_movements', 'asset_documents', 'maintenance_records',
-        'purchase_records', 'audit_logs'
+        'purchase_records'
       ];
+      allow delete: if false;
     }
   }
 }
