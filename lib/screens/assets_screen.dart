@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/models/office.dart';
 import 'package:metra_it_assets/screens/asset_form_screen.dart';
+import 'package:metra_it_assets/screens/asset_scanner_screen.dart';
 import 'package:metra_it_assets/services/asset_repository.dart';
 import 'package:metra_it_assets/services/office_repository.dart';
 
@@ -124,8 +125,34 @@ class _AssetsScreenState extends State<AssetsScreen> {
       const Align(alignment: Alignment.centerRight, child: Text('سجل الأصول', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
       const SizedBox(height: 16),
       Wrap(spacing: 12, runSpacing: 12, children: [
-        SizedBox(width: 280, child: TextField(controller: search, onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'بحث بالاسم أو الموديل أو الرقم التسلسلي'))),
+        SizedBox(
+          width: 280,
+          child: TextField(
+            controller: search,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'بحث بالاسم أو الموديل أو الرقم التسلسلي',
+            ),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final code = await Navigator.push<String>(
+              context,
+              MaterialPageRoute(builder: (_) => const AssetScannerScreen()),
+            );
+            if (code != null && mounted) {
+              setState(() {
+                search.text = code;
+                category = null;
+                status = null;
+              });
+            }
+          },
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('مسح الرمز'),
+        ),
         SizedBox(width: 220, child: DropdownButtonFormField<AssetCategory>(initialValue: category, decoration: const InputDecoration(labelText: 'التصنيف'),
           items: AssetCategory.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>category=v))),
         SizedBox(width: 220, child: DropdownButtonFormField<AssetStatus>(initialValue: status, decoration: const InputDecoration(labelText: 'الحالة'),
