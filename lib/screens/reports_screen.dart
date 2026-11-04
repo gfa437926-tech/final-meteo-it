@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
@@ -120,6 +121,101 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ],
       text: 'تقرير جرد الأصول التقنية بصيغة CSV',
     );
+  }
+
+  static String _escapeHtml(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+  Future<void> _exportPrintableReport(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+  ) async {
+    final categories = <String, int>{};
+    final statuses = <String, int>{};
+    for (final document in documents) {
+      final data = document.data();
+      final category = data['category'] as String? ?? 'other';
+      final status = data['status'] as String? ?? 'available';
+      categories[category] = (categories[category] ?? 0) + 1;
+      statuses[status] = (statuses[status] ?? 0) + 1;
+    }
+    final rows = documents.map((document) {
+      final data = document.data();
+      return '''
+<tr>
+<td>${_escapeHtml(document.id)}</td>
+<td>${_escapeHtml(_categoryLabel(data['category'] as String? ?? 'other'))}</td>
+<td>${_escapeHtml(data['brand']?.toString() ?? '')}</td>
+<td>${_escapeHtml(data['model']?.toString() ?? '')}</td>
+<td>${_escapeHtml(data['serialNumber']?.toString() ?? '')}</td>
+<td>${_escapeHtml(_statusLabel(data['status'] as String? ?? 'available'))}</td>
+<td>${_escapeHtml(data['officeName']?.toString() ?? '')}</td>
+</tr>''';
+    }).join();
+    final categorySummary = categories.entries.map((entry) =>
+      '<li>${_escapeHtml(_categoryLabel(entry.key))}: ${entry.value}</li>').join();
+    final statusSummary = statuses.entries.map((entry) =>
+      '<li>${_escapeHtml(_statusLabel(entry.key))}: ${entry.value}</li>').join();
+    final generatedAt = DateTime.now().toLocal().toString().split('.').first;
+    final html = '''
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تقرير جرد الأصول التقنية</title>
+<style>
+@page { size: A4 landscape; margin: 12mm; }
+* { box-sizing: border-box; }
+body { font-family: Tahoma, Arial, sans-serif; color: #172b3a; line-height: 1.65; }
+header { border-bottom: 3px solid #168c8c; padding-bottom: 12px; margin-bottom: 18px; }
+h1 { margin: 0; font-size: 23px; }
+.meta { color: #536574; font-size: 12px; }
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 15px 0; }
+.card { border: 1px solid #c5d0d7; border-radius: 6px; padding: 10px 14px; }
+.card h2 { margin: 0 0 6px; font-size: 14px; }
+.card ul { margin: 0; padding-right: 18px; font-size: 12px; }
+.total { font-size: 26px; font-weight: bold; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th, td { border: 1px solid #aab8c2; padding: 6px 7px; text-align: right; overflow-wrap: anywhere; }
+th { background: #edf4f5; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; }
+@media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+<header>
+<h1>تقرير جرد الأصول التقنية</h1>
+<div class="meta">تقرير آلي من نظام إدارة وجرد الأصول • تاريخ الإنشاء: ${_escapeHtml(generatedAt)}</div>
+<div class="meta">التقرير يعكس الأصول المطابقة لعوامل التصفية المختارة في شاشة التقارير</div>
+</header>
+<section class="summary">
+<div class="card"><h2>إجمالي الأصول</h2><div class="total">${documents.length}</div></div>
+<div class="card"><h2>التوزيع حسب التصنيف</h2><ul>${categorySummary}</ul></div>
+<div class="card"><h2>التوزيع حسب الحالة</h2><ul>${statusSummary}</ul></div>
+</section>
+<table>
+<thead><tr><th>معرّف الأصل</th><th>التصنيف</th><th>الشركة</th><th>الطراز</th><th>الرقم التسلسلي</th><th>الحالة</th><th>المكتب</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<footer>وثيقة مولدة آلياً • يرجى مراجعة البيانات مع سجل الأصول قبل اعتمادها رسمياً</footer>
+<div class="no-print" style="text-align:center;margin-top:18px"><button onclick="window.print()">طباعة / حفظ كملف PDF</button></div>
+</body>
+</html>
+''';
+    await Share.shareXFiles([
+      XFile.fromData(
+        Uint8List.fromList(utf8.encode(html)),
+        mimeType: 'text/html',
+        name: 'it-assets-report.html',
+      ),
+    ], text: 'تقرير جرد الأصول التقنية - افتح الملف واطبعه أو احفظه PDF');
   }
 
   static String _categoryLabel(String value) => const {
@@ -340,8 +436,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   label: const Text('تصدير Excel'),
                 ),
                 const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: documents.isEmpty
+                      ? null
+                      : () async {
+                          try {
+                            await _exportPrintableReport(context, documents);
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('تعذر إنشاء التقرير القابل للطباعة: $error')),
+                              );
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('إنشاء تقرير للطباعة / حفظ PDF'),
+                ),
+                const SizedBox(height: 8),
                 const Text(
-                  'يمكن نسخ التقرير أو مشاركته كملف CSV أو Excel، مع المحافظة على أسماء الحقول والبيانات العربية.',
+                  'يمكن تصدير البيانات كـ CSV أو Excel، أو إنشاء تقرير عربي منسق وطباعته أو حفظه PDF من نافذة الطباعة.',
                   style: TextStyle(color: Colors.black54),
                 ),
               ],
