@@ -182,7 +182,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
             if (numeric && value != null && value.trim().isNotEmpty) {
               final parsed = double.tryParse(value);
               if (parsed == null || !parsed.isFinite || parsed < 0 ||
-                  (label.contains('الكمية') && parsed != parsed.roundToDouble())) {
+                  ((label.contains('الكمية') || label.contains('حد التنبيه')) && parsed != parsed.roundToDouble())) {
                 return 'أدخل قيمة صحيحة غير سالبة';
               }
             }
