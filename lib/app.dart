@@ -60,7 +60,7 @@ class _AuthenticationGate extends StatelessWidget {
             message: 'تعذر التحقق من صلاحيات الحساب. راجع مسؤول النظام.',
             onSignOut: () => FirebaseAuth.instance.signOut(),
           );
-          if (!profile.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          if (!profile.hasData) { return const Scaffold(body: Center(child: CircularProgressIndicator())); }
           final data = profile.data!.data();
           final role = data?['role'] as String? ?? '';
           final active = data?['isActive'] != false;
