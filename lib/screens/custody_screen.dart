@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:metra_it_assets/services/custody_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -15,6 +16,7 @@ class _CustodyScreenState extends State<CustodyScreen> {
   final employee = TextEditingController();
   final office = TextEditingController();
   final notes = TextEditingController();
+  final rejectionReason = TextEditingController();
   String? assetId;
   String? assetLabel;
 
@@ -23,6 +25,7 @@ class _CustodyScreenState extends State<CustodyScreen> {
     employee.dispose();
     office.dispose();
     notes.dispose();
+    rejectionReason.dispose();
     super.dispose();
   }
 
@@ -141,6 +144,65 @@ class _CustodyScreenState extends State<CustodyScreen> {
     notes.clear();
     assetId = null;
     assetLabel = null;
+  }
+
+  Future<void> approve(CustodyRecord record) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      await repo.approveCustody(record, approverUid: uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم اعتماد بطاقة العهدة')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر اعتماد العهدة: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> reject(CustodyRecord record) async {
+    rejectionReason.clear();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('رفض بطاقة العهدة'),
+        content: TextField(
+          controller: rejectionReason,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'سبب الرفض (اختياري)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, rejectionReason.text),
+            child: const Text('تأكيد الرفض'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      await repo.rejectCustody(record, approverUid: uid, reason: reason);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم رفض العهدة وإعادة الجهاز إلى المتاح')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر رفض العهدة: $error')),
+        );
+      }
+    }
   }
 
   Future<void> transfer(CustodyRecord record) async {
@@ -275,10 +337,11 @@ class _CustodyScreenState extends State<CustodyScreen> {
                 itemBuilder: (context, index) {
                   final record = records[index];
                   final active = record.status == 'active';
+                  final pending = active && record.approvalStatus == 'pending';
                   return Card(
                     child: ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.assignment_ind),
+                      leading: CircleAvatar(
+                        child: Icon(pending ? Icons.pending_actions : Icons.assignment_ind),
                       ),
                       title: Text(
                         record.employeeName,
@@ -287,23 +350,43 @@ class _CustodyScreenState extends State<CustodyScreen> {
                       subtitle: Text(
                         '${record.assetLabel} • ${record.officeName}',
                       ),
-                      trailing: active
+                      trailing: pending
                           ? Wrap(
-                              spacing: 4,
+                              spacing: 2,
                               children: [
                                 IconButton(
-                                  tooltip: 'نقل العهدة',
-                                  onPressed: () => transfer(record),
-                                  icon: const Icon(Icons.swap_horiz),
+                                  tooltip: 'اعتماد العهدة',
+                                  onPressed: () => approve(record),
+                                  icon: const Icon(Icons.check_circle_outline, color: Colors.green),
                                 ),
                                 IconButton(
-                                  tooltip: 'إرجاع الجهاز',
-                                  onPressed: () => returnCustody(record),
-                                  icon: const Icon(Icons.assignment_return),
+                                  tooltip: 'رفض العهدة',
+                                  onPressed: () => reject(record),
+                                  icon: const Icon(Icons.cancel_outlined, color: Colors.red),
                                 ),
                               ],
                             )
-                          : const Chip(label: Text('مغلقة')),
+                          : active
+                              ? Wrap(
+                                  spacing: 4,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'نقل العهدة',
+                                      onPressed: () => transfer(record),
+                                      icon: const Icon(Icons.swap_horiz),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'إرجاع الجهاز',
+                                      onPressed: () => returnCustody(record),
+                                      icon: const Icon(Icons.assignment_return),
+                                    ),
+                                  ],
+                                )
+                              : Chip(
+                                  label: Text(record.approvalStatus == 'rejected'
+                                      ? 'مرفوضة'
+                                      : 'مغلقة'),
+                                ),
                     ),
                   );
                 },
