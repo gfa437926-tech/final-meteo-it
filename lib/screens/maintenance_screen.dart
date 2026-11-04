@@ -36,7 +36,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
           TextFormField(controller:title,decoration:const InputDecoration(labelText:'عنوان العطل'),validator:(v)=>v==null||v.trim().isEmpty?'هذا الحقل مطلوب':null),
           TextFormField(controller:description,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'وصف العطل')),
           TextFormField(controller:technician,decoration:const InputDecoration(labelText:'الفني المسؤول')),
-          DropdownButtonFormField<String>(value:priority,decoration:const InputDecoration(labelText:'الأولوية'),items:const [
+          DropdownButtonFormField<String>(initialValue:priority,decoration:const InputDecoration(labelText:'الأولوية'),items:const [
             DropdownMenuItem(value:'low',child:Text('منخفضة')),DropdownMenuItem(value:'normal',child:Text('عادية')),DropdownMenuItem(value:'high',child:Text('عالية')),DropdownMenuItem(value:'urgent',child:Text('عاجلة')),
           ],onChanged:(v)=>setDialog(()=>priority=v??'normal')),
         ])))),
