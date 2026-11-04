@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/services/asset_repository.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 class AssetImportScreen extends StatefulWidget {
@@ -85,7 +87,7 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
         if (row.every((cell) => cell.toString().trim().isEmpty)) continue;
         final errors = <String>[];
         final categoryValue = valueAt(row, 'category').toLowerCase();
-        final category = AssetCategory.values.where((item) => item.name == categoryValue);
+        final category = AssetCategory.values.where((item) => item.name == categoryValue).toList();
         if (category.isEmpty) errors.add('تصنيف الجهاز غير صالح');
         final brand = valueAt(row, 'brand');
         final model = valueAt(row, 'model');
@@ -100,9 +102,10 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
           errors.add('الرقم التسلسلي مكرر داخل ملف الاستيراد');
         }
         final statusValue = valueAt(row, 'status').toLowerCase();
-        final status = statusValue.isEmpty
-            ? AssetStatus.available
-            : AssetStatus.values.where((item) => item.name == statusValue).firstOrNull;
+        AssetStatus? status = statusValue.isEmpty ? AssetStatus.available : null;
+        for (final candidate in AssetStatus.values) {
+          if (candidate.name == statusValue) status = candidate;
+        }
         if (status == null) errors.add('حالة الجهاز غير صالحة');
         final officeId = valueAt(row, 'office_id');
         final office = officeId.isEmpty ? null : offices[officeId];
@@ -116,7 +119,7 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
           rowNumber: i + 1,
           asset: Asset(
             id: const Uuid().v4(),
-            category: category.firstOrNull ?? AssetCategory.other,
+            category: category.isEmpty ? AssetCategory.other : category.first,
             brand: brand,
             model: model,
             serialNumber: serial,
@@ -171,12 +174,8 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
     if (!mounted) return;
     setState(() {
       importing = false;
-      rows = rows.map((row) {
-        if (row.valid && !failures.any((failure) => failure.startsWith('السطر ${row.rowNumber}:'))) {
-          return row;
-        }
-        return row;
-      }).toList();
+      rows = rows.where((row) =>
+          !row.valid || failures.any((failure) => failure.startsWith('السطر ${row.rowNumber}:'))).toList();
     });
     await showDialog<void>(
       context: context,
