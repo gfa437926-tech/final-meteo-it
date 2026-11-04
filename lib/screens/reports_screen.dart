@@ -156,7 +156,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final documents = snapshot.data!.docs.where((document) {\n              final data = document.data();\n              return (categoryFilter == null || data['category'] == categoryFilter) &&\n                  (statusFilter == null || data['status'] == statusFilter);\n            }).toList();
+            final documents = snapshot.data!.docs.where((document) {
+              final data = document.data();
+              return (categoryFilter == null || data['category'] == categoryFilter) &&
+                  (statusFilter == null || data['status'] == statusFilter);
+            }).toList();
             int count(String status) => documents
                 .where((document) => document.data()['status'] == status)
                 .length;
