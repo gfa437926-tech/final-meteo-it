@@ -16,6 +16,7 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   String? categoryFilter;
   String? statusFilter;
+  String? officeFilter;
 
   Future<void> _copyCsv(
     BuildContext context,
@@ -158,7 +159,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             final documents = snapshot.data!.docs.where((document) {
               final data = document.data();
               return (categoryFilter == null || data['category'] == categoryFilter) &&
-                  (statusFilter == null || data['status'] == statusFilter);
+                  (statusFilter == null || data['status'] == statusFilter) &&
+                  (officeFilter == null || data['officeId'] == officeFilter);
             }).toList();
             int count(String status) => documents
                 .where((document) => document.data()['status'] == status)
@@ -177,54 +179,79 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 220,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: categoryFilter,
-                        decoration: const InputDecoration(labelText: 'تصفية حسب التصنيف'),
-                        items: [
-                          const DropdownMenuItem(value: null, child: Text('كل التصنيفات')),
-                          ...['desktop','laptop','monitor','printer','scanner','network','storage','ups','accessory','other']
-                              .map((value) => DropdownMenuItem(
-                                    value: value,
-                                    child: Text(_categoryLabel(value)),
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance.collection('offices').orderBy('name').snapshots(),
+                  builder: (context, officeSnapshot) {
+                    final offices = officeSnapshot.data?.docs ?? [];
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: categoryFilter,
+                            decoration: const InputDecoration(labelText: 'تصفية حسب التصنيف'),
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('كل التصنيفات')),
+                              ...['desktop','laptop','monitor','printer','scanner','network','storage','ups','accessory','other']
+                                  .map((value) => DropdownMenuItem<String>(
+                                        value: value,
+                                        child: Text(_categoryLabel(value)),
+                                      )),
+                            ],
+                            onChanged: (value) => setState(() => categoryFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: statusFilter,
+                            decoration: const InputDecoration(labelText: 'تصفية حسب الحالة'),
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('كل الحالات')),
+                              ...['available','assigned','maintenance','damaged','retired','returned']
+                                  .map((value) => DropdownMenuItem<String>(
+                                        value: value,
+                                        child: Text(_statusLabel(value)),
+                                      )),
+                            ],
+                            onChanged: (value) => setState(() => statusFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 240,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: officeFilter,
+                            decoration: const InputDecoration(labelText: 'تصفية حسب المكتب'),
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('كل المكاتب')),
+                              ...offices.map((office) => DropdownMenuItem<String>(
+                                    value: office.id,
+                                    child: Text(
+                                      office.data()['name'] as String? ?? office.id,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   )),
-                        ],
-                        onChanged: (value) => setState(() => categoryFilter = value),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 220,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: statusFilter,
-                        decoration: const InputDecoration(labelText: 'تصفية حسب الحالة'),
-                        items: [
-                          const DropdownMenuItem(value: null, child: Text('كل الحالات')),
-                          ...['available','assigned','maintenance','damaged','retired','returned']
-                              .map((value) => DropdownMenuItem(
-                                    value: value,
-                                    child: Text(_statusLabel(value)),
-                                  )),
-                        ],
-                        onChanged: (value) => setState(() => statusFilter = value),
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: categoryFilter == null && statusFilter == null
-                          ? null
-                          : () => setState(() {
-                                categoryFilter = null;
-                                statusFilter = null;
-                              }),
-                      icon: const Icon(Icons.filter_alt_off),
-                      label: const Text('مسح التصفية'),
-                    ),
-                  ],
+                            ],
+                            onChanged: (value) => setState(() => officeFilter = value),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: categoryFilter == null && statusFilter == null && officeFilter == null
+                              ? null
+                              : () => setState(() {
+                                    categoryFilter = null;
+                                    statusFilter = null;
+                                    officeFilter = null;
+                                  }),
+                          icon: const Icon(Icons.filter_alt_off),
+                          label: const Text('مسح التصفية'),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 GridView.count(
