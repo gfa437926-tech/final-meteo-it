@@ -17,7 +17,7 @@
 - [x] GitHub Actions workflow and model tests
 
 ## Remaining before operational pilot
-- [ ] Verify latest CI run and fix any remaining analyzer/test failures
+- [ ] Verify the latest complete CI run (Flutter analyze/tests/build plus Firebase Emulator job) and fix any remaining failures
 - [ ] Configure dedicated Firebase project, FlutterFire platform files, and deploy Firestore/Storage rules
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
@@ -45,7 +45,8 @@
 - [ ] Add richer receipt workflow and invoice preview
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
 - [ ] Add PDF exports
-- [ ] Add Google Sheets import/export with validation and audit trail
+- [x] Define the secure Google Sheets import/export contract and acceptance criteria (implementation remains pending)
+- [ ] Implement Google Sheets import/export with validation, staging preview, idempotent writes, and audit trail
 - [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job (final emulator run pending)
 - [ ] Verify emulator rules suite passes on the latest commit and add backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
