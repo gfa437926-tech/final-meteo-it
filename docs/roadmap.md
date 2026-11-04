@@ -33,7 +33,8 @@
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
 - [x] Add chronological asset movement history screen
-- [ ] Add service history views and spare-parts records
+- [x] Add per-asset maintenance service history with ticket timeline and cumulative costs
+- [ ] Add spare-parts inventory and consumption records
 - [x] Add purchase invoice records linked to assets, supplier, amount, purchase date, and warranty expiry\n- [ ] Add invoice/document file attachments and richer receipt workflow
 - [x] Add live inventory summary and Arabic CSV report copy/export-to-clipboard\n- [ ] Add downloadable Excel/CSV/PDF exports and filtered office/asset reports
 - [ ] Add Google Sheets import/export with validation and audit trail
