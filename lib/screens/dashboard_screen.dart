@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/screens/offices_screen.dart';
@@ -64,12 +65,7 @@ class DashboardScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   const Text('نظرة عامة على الأصول والتجهيزات التقنية', style: TextStyle(color: Colors.black54)),
                   const SizedBox(height: 24),
-                  Wrap(spacing: 14, runSpacing: 14, children: const [
-                    _MetricCard(title: 'إجمالي الأصول', value: '0', icon: Icons.devices, color: navy),
-                    _MetricCard(title: 'المكاتب', value: '0', icon: Icons.business_outlined, color: teal),
-                    _MetricCard(title: 'أجهزة موزعة', value: '0', icon: Icons.assignment_turned_in_outlined, color: Color(0xFF7C5CBA)),
-                    _MetricCard(title: 'تحتاج صيانة', value: '0', icon: Icons.build_outlined, color: Color(0xFFD97706)),
-                  ]),
+                  const _LiveMetrics(),
                   const SizedBox(height: 24),
                   LayoutBuilder(builder: (context, constraints) {
                     final twoColumns = constraints.maxWidth > 760;
@@ -81,8 +77,7 @@ class DashboardScreen extends StatelessWidget {
                           flex: twoColumns ? 3 : 0,
                           child: _Panel(
                             title: 'التصنيف حسب نوع الجهاز',
-                            child: Column(children: AssetCategory.values.map((c) =>
-                              _CategoryRow(label: c.label, count: 0)).toList()),
+                            child: const _LiveCategoryOverview(),
                           ),
                         ),
                         if (twoColumns) const SizedBox(width: 16) else const SizedBox(height: 16),
@@ -112,6 +107,70 @@ class DashboardScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+
+class _LiveMetrics extends StatelessWidget {
+  const _LiveMetrics();
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        builder: (context, assetSnapshot) {
+          if (assetSnapshot.hasError) {
+            return const Text('تعذر تحميل إحصائيات الأصول');
+          }
+          if (!assetSnapshot.hasData) {
+            return const LinearProgressIndicator();
+          }
+          final assets = assetSnapshot.data!.docs;
+          final assigned = assets.where((doc) => doc.data()['status'] == 'assigned').length;
+          final maintenance = assets.where((doc) => doc.data()['status'] == 'maintenance').length;
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance.collection('offices').snapshots(),
+            builder: (context, officeSnapshot) {
+              final officeCount = officeSnapshot.data?.docs.length ?? 0;
+              return Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  _MetricCard(title: 'إجمالي الأصول', value: '${assets.length}', icon: Icons.devices, color: DashboardScreen.navy),
+                  _MetricCard(title: 'المكاتب', value: '${officeSnapshot.hasError ? '—' : officeCount}', icon: Icons.business_outlined, color: DashboardScreen.teal),
+                  _MetricCard(title: 'أجهزة موزعة', value: '$assigned', icon: Icons.assignment_turned_in_outlined, color: const Color(0xFF7C5CBA)),
+                  _MetricCard(title: 'تحتاج صيانة', value: '$maintenance', icon: Icons.build_outlined, color: const Color(0xFFD97706)),
+                ],
+              );
+            },
+          );
+        },
+      );
+}
+
+class _LiveCategoryOverview extends StatelessWidget {
+  const _LiveCategoryOverview();
+
+  @override
+  Widget build(BuildContext context) =>
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('تعذر تحميل توزيع الأصول حسب النوع');
+          }
+          if (!snapshot.hasData) {
+            return const LinearProgressIndicator();
+          }
+          final documents = snapshot.data!.docs;
+          return Column(
+            children: AssetCategory.values.map((category) {
+              final count = documents
+                  .where((doc) => doc.data()['category'] == category.name)
+                  .length;
+              return _CategoryRow(label: category.label, count: count);
+            }).toList(),
+          );
+        },
+      );
 }
 
 class _SideNavigation extends StatelessWidget {
