@@ -11,10 +11,14 @@ service cloud.firestore {
     function isAdmin() {
       return userExists() && userDoc().role in ['admin', 'it_manager'];
     }
+    function isSuperAdmin() {
+      return userExists() && userDoc().role == 'admin';
+    }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isSuperAdmin() && request.auth.uid != uid;
+      allow delete: if false;
     }
     match /offices/{officeId} {
       allow read: if signedIn();
