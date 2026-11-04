@@ -62,11 +62,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /maintenance_parts/{usageId} {
-      allow read: if isActiveUser();
-      allow create: if isAdmin();
-      allow update, delete: if false;
-    }
     match /{collection}/{document=**} {
       allow read: if isActiveUser() && collection in [
         'asset_categories', 'asset_models', 'custody_items',
