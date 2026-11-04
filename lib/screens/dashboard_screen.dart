@@ -13,6 +13,7 @@ import 'package:metra_it_assets/screens/purchases_screen.dart';
 import 'package:metra_it_assets/screens/service_history_screen.dart';
 import 'package:metra_it_assets/screens/spare_parts_screen.dart';
 import 'package:metra_it_assets/screens/asset_documents_screen.dart';
+import 'package:metra_it_assets/screens/asset_import_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -260,6 +261,7 @@ class _SideNavigation extends StatelessWidget {
       _NavItem(icon: Icons.inventory_2_outlined, label: 'مخزون قطع الغيار', destination: const SparePartsScreen()),
       _NavItem(icon: Icons.receipt_long_outlined, label: 'المشتريات والضمان', destination: const PurchasesScreen()),
       _NavItem(icon: Icons.attach_file_outlined, label: 'مرفقات الأصول', destination: const AssetDocumentsScreen()),
+      _NavItem(icon: Icons.file_upload_outlined, label: 'استيراد الأصول', destination: const AssetImportScreen()),
       _NavItem(icon: Icons.analytics_outlined, label: 'التقارير', destination: const ReportsScreen()),
       StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
