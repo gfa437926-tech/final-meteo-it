@@ -90,6 +90,23 @@ test('only a super administrator can provision another user profile', async () =
   }));
 });
 
+test('users can edit only string profile fields and timestamp metadata', async () => {
+  const db = env.authenticatedContext('manager-1').firestore();
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    displayName: { forged: true },
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    email: 42,
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'manager-1'), {
+    updatedAt: 'not-a-timestamp',
+  }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'manager-1'), {
+    displayName: 'Updated Manager',
+    updatedAt: new Date(),
+  }));
+});
+
 test('super administrator cannot change own role or active state', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
   await assertFails(updateDoc(doc(db, 'users', 'admin-1'), {
