@@ -32,6 +32,13 @@ class AssetRepository {
   Future<void> createAsset(Asset asset) async {
     final serial = _normalizeSerial(asset.serialNumber);
     final assetRef = _assets.doc(asset.id);
+    if (serial.isNotEmpty) {
+      final existingAssets = await _assets.get();
+      final duplicate = existingAssets.docs.any((doc) =>
+          _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
+          serial);
+      if (duplicate) throw StateError('الرقم التسلسلي مسجل مسبقاً');
+    }
     await _db.runTransaction((tx) async {
       final assetSnapshot = await tx.get(assetRef);
       if (assetSnapshot.exists) {
@@ -42,11 +49,7 @@ class AssetRepository {
       if (serial.isNotEmpty) {
         serialRef = _serialRef(serial);
         final serialSnapshot = await tx.get(serialRef);
-        final legacyMatches = await tx.get(_assets);
-        final legacyDuplicate = legacyMatches.docs.any((doc) =>
-            _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
-            serial);
-        if (serialSnapshot.exists || legacyDuplicate) {
+        if (serialSnapshot.exists) {
           throw StateError('الرقم التسلسلي مسجل مسبقاً');
         }
       }
@@ -65,6 +68,14 @@ class AssetRepository {
   Future<void> updateAsset(Asset asset) async {
     final assetRef = _assets.doc(asset.id);
     final newSerial = _normalizeSerial(asset.serialNumber);
+    if (newSerial.isNotEmpty) {
+      final existingAssets = await _assets.get();
+      final duplicate = existingAssets.docs.any((doc) =>
+          doc.id != asset.id &&
+          _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
+              newSerial);
+      if (duplicate) throw StateError('الرقم التسلسلي مسجل لجهاز آخر');
+    }
 
     await _db.runTransaction((tx) async {
       final assetSnapshot = await tx.get(assetRef);
@@ -90,12 +101,7 @@ class AssetRepository {
       if (newSerial.isNotEmpty && serialChanged) {
         newSerialRef = _serialRef(newSerial);
         newSerialSnapshot = await tx.get(newSerialRef);
-        final legacyMatches = await tx.get(_assets);
-        final legacyDuplicate = legacyMatches.docs.any((doc) =>
-            doc.id != asset.id &&
-            _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
-                newSerial);
-        if (newSerialSnapshot.exists || legacyDuplicate) {
+        if (newSerialSnapshot.exists) {
           throw StateError('الرقم التسلسلي مسجل لجهاز آخر');
         }
       }
