@@ -63,7 +63,7 @@ class _AuthenticationGate extends StatelessWidget {
           if (!profile.hasData) { return const Scaffold(body: Center(child: CircularProgressIndicator())); }
           final data = profile.data!.data();
           final role = data?['role'] as String? ?? '';
-          final active = data?['isActive'] != false;
+          final active = data?['isActive'] == true;
           final allowed = profile.data!.exists && active && ['admin', 'it_manager'].contains(role);
           if (!allowed) return _AccessMessage(
             message: 'الحساب غير مفعّل أو لا يملك صلاحية الدخول إلى لوحة الإدارة.',
