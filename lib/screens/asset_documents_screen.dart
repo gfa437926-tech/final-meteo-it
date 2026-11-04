@@ -208,7 +208,14 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                               child: ListTile(
                                 leading: const CircleAvatar(child: Icon(Icons.description_outlined)),
                                 title: Text(data['fileName'] as String? ?? 'مستند'),
-                                subtitle: Text('${switch (data['documentType'] as String? ?? 'other') {\n                                  'invoice' => 'فاتورة شراء',\n                                  'warranty' => 'كفالة / ضمان',\n                                  'handover' => 'محضر تسليم أو استلام',\n                                  'maintenance' => 'مستند صيانة',\n                                  'photo' => 'صورة الجهاز',\n                                  _ => 'مستند آخر',\n                                }} • ${(size / 1024).toStringAsFixed(2)} MB'),
+                                subtitle: Text('${switch (data['documentType'] as String? ?? 'other') {
+                                  'invoice' => 'فاتورة شراء',
+                                  'warranty' => 'كفالة / ضمان',
+                                  'handover' => 'محضر تسليم أو استلام',
+                                  'maintenance' => 'مستند صيانة',
+                                  'photo' => 'صورة الجهاز',
+                                  _ => 'مستند آخر',
+                                }} • ${(size / 1024).toStringAsFixed(2)} MB'),
                                 trailing: IconButton(
                                   tooltip: 'تنزيل أو مشاركة المستند',
                                   icon: const Icon(Icons.download_outlined),
