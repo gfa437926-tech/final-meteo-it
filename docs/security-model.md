@@ -40,3 +40,11 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
 - Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
 - Firebase Emulator tests are required before deploying these rules.
+
+
+## File attachment controls
+
+- Asset documents are stored in Firebase Storage under an asset-specific path; Firestore stores metadata and the storage path, not a public download-token URL.
+- Storage reads require an active user profile; uploads require an active `admin` or `it_manager` profile.
+- Upload rules restrict content types and enforce a 10 MB limit. Client-side upload and download are performed through authenticated Firebase Storage SDK calls.
+- Storage updates and deletes are denied from the client. Deploy and verify `storage.rules` before enabling this feature.
