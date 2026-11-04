@@ -36,7 +36,7 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: DropdownButtonFormField<String>(
-                    value: selected,
+                    initialValue: selected,
                     decoration: const InputDecoration(
                       labelText: 'اختر الجهاز لعرض سجله الفني',
                       prefixIcon: Icon(Icons.devices_other),
@@ -73,7 +73,7 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                             .compareTo(_date(a.data()['reportedAt'])));
                       final totalCost = records.fold<double>(
                         0,
-                        (sum, doc) => sum + ((doc.data()['cost'] as num?)?.toDouble() ?? 0),
+                        (total, doc) => total + ((doc.data()['cost'] as num?)?.toDouble() ?? 0),
                       );
                       return Column(
                         children: [
