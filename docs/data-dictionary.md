@@ -38,3 +38,12 @@
 `assetId, assetLabel, movementType, occurredAt, maintenanceId, notes, cost, fromEmployee, toEmployee, fromOffice, toOffice`
 
 > Inventory consumption is recorded transactionally: stock is reduced only when the maintenance ticket is still open or in progress and sufficient quantity is available. The issued parts cost is accumulated separately in `maintenance_records.partsCost`; service history displays it separately from repair/labour cost.
+
+
+## spare_parts/{partId}
+
+- `name`, `sku`, `quantity`, `minimumQuantity`, `unitCost`, `supplier`, `createdAt`, `updatedAt`
+
+## maintenance_parts/{usageId}
+
+Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`.

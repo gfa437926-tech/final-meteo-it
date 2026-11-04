@@ -33,7 +33,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /assets/{assetId} {
-      allow read: if signedIn();
+      allow read: if isActiveUser();
       allow create, update: if isAdmin();
       allow delete: if false;
     }
@@ -42,13 +42,25 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /custody_cards/{cardId} {
-      allow read: if signedIn();
+      allow read: if isActiveUser();
       allow create, update: if isAdmin();
       allow delete: if false;
     }
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    match /spare_parts/{partId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /maintenance_parts/{usageId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
     match /{collection}/{document=**} {
       allow read: if isActiveUser() && collection in [
@@ -59,7 +71,7 @@ service cloud.firestore {
       allow create, update: if isAdmin() && collection in [
         'asset_categories', 'asset_models', 'custody_items',
         'asset_movements', 'asset_documents', 'maintenance_records',
-        'purchase_records', 'spare_parts', 'maintenance_parts'
+        'purchase_records'
       ];
       allow delete: if false;
     }

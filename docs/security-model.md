@@ -32,3 +32,11 @@
 ## Release limitations
 
 This is a baseline for a controlled pilot, not a complete enterprise authorization model. Office-scoped roles, trusted server-side account provisioning, Firebase Emulator rules tests, backups, and production monitoring remain required before wider deployment.
+
+
+## Firestore rule hardening
+
+- The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
+- Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
+- Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
+- Firebase Emulator tests are required before deploying these rules.
