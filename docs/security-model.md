@@ -62,3 +62,8 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 ## Printable custody records
 
 The custody register can generate a self-contained Arabic RTL A4 HTML handover form for each card. The form escapes all user-supplied values before embedding them, includes custody and asset identifiers, employee/office details, current approval/return state, a receipt declaration, and signature/approval spaces. The generated HTML is shared as a file so it can be opened in a browser and printed; it is not a signed digital approval or a PDF archive.
+
+
+## CSV import audit
+
+CSV import writes an `import_batches/{batchId}` outcome record containing the initiating UID, source filename, row totals, success/failure counts, and row-level errors. Firestore rules bind `createdBy` to the authenticated actor and make the record append-only. The import itself is sequential; a batch record summarizes the result and does not imply all-or-nothing rollback.
