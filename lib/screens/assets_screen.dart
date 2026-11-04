@@ -70,7 +70,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         decoration: const InputDecoration(labelText: 'المكتب الوجهة'),
                         items: available.map((o) => DropdownMenuItem(value: o.id, child: Text(o.name))).toList(),
                         onChanged: (id) => setDialog(() {
-                          destination = available.where((o) => o.id == id).firstOrNull;
+                          destination = available.firstWhere((o) => o.id == id);
                         }),
                         validator: (_) => destination == null ? 'اختر المكتب الوجهة' : null,
                       );
