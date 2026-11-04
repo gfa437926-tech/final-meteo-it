@@ -16,7 +16,7 @@
 `technology, functions[], colorMode, paperSizes[], ppm, memoryMB, tonerModel, ipAddress, connectivity[]`
 
 ## custody_cards
-`id, cardNumber, officeId, custodianId, openedAt, status, notes`
+`id, assetId, assetLabel, employeeName, officeName, assignedAt, status, approvalStatus, approvedBy?, approvedAt?, rejectedBy?, rejectedAt?, rejectionReason?, notes`
 
 ## movement records
 `id, assetId, fromOfficeId, toOfficeId, fromCustodianId, toCustodianId, movedAt, documentNumber, reason, actorId`
