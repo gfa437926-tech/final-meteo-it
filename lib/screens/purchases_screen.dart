@@ -319,9 +319,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
               itemBuilder: (context, index) {
                 final record = snapshot.data![index];
                 final warranty = record.warrantyUntil;
+                final today = DateTime.now();
+                final warrantyExpired = warranty != null &&
+                    warranty.isBefore(DateTime(today.year, today.month, today.day));
                 final warrantyLabel = warranty == null
                     ? 'لا يوجد تاريخ ضمان'
-                    : 'الضمان حتى ${dateFormat.format(warranty)}';
+                    : warrantyExpired
+                        ? 'انتهى الضمان بتاريخ ${dateFormat.format(warranty)}'
+                        : 'الضمان ساري حتى ${dateFormat.format(warranty)}';
                 return Card(
                   child: ListTile(
                     onTap: () => _showPurchaseDetails(record),
