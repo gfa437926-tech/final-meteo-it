@@ -12,6 +12,9 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
+  ref as storageRef,
+  uploadBytes,
+  getBytes,
 } from 'firebase/firestore';
 
 let env;
@@ -21,6 +24,9 @@ before(async () => {
     projectId: 'demo-metra-it-assets',
     firestore: {
       rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'),
+    },
+    storage: {
+      rules: readFileSync(new URL('../storage.rules', import.meta.url), 'utf8'),
     },
   });
 });
@@ -126,4 +132,33 @@ test('rejection must close the card and release its assigned asset atomically', 
   }));
   const asset = await getDoc(doc(db, 'assets', 'asset-1'));
   assert.equal(asset.data().status, 'available');
+});
+
+
+test('active users can read private asset attachments', async () => {
+  const adminStorage = env.authenticatedContext('admin-1').storage();
+  const file = storageRef(adminStorage, 'asset_documents/asset-1/sample.pdf');
+  await assertSucceeds(uploadBytes(file, new Uint8Array([37, 80, 68, 70]), {
+    contentType: 'application/pdf',
+  }));
+  const activeStorage = env.authenticatedContext('manager-1').storage();
+  await assertSucceeds(getBytes(storageRef(activeStorage, 'asset_documents/asset-1/sample.pdf')));
+});
+
+test('unauthenticated users cannot read asset attachments', async () => {
+  const adminStorage = env.authenticatedContext('admin-1').storage();
+  const file = storageRef(adminStorage, 'asset_documents/asset-1/private.pdf');
+  await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), {
+    contentType: 'application/pdf',
+  }));
+  const publicStorage = env.unauthenticatedContext().storage();
+  await assertFails(getBytes(storageRef(publicStorage, 'asset_documents/asset-1/private.pdf')));
+});
+
+test('storage uploads reject unsupported content types', async () => {
+  const adminStorage = env.authenticatedContext('admin-1').storage();
+  const file = storageRef(adminStorage, 'asset_documents/asset-1/malware.exe');
+  await assertFails(uploadBytes(file, new Uint8Array([1, 2, 3]), {
+    contentType: 'application/x-msdownload',
+  }));
 });
