@@ -22,7 +22,7 @@
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [ ] Implement trusted user provisioning, full role management, and office-scoped permissions
 - [x] Add asset editing and safe retirement with movement history
-- [x] Add camera barcode/QR scanning and locate assets by scanned serial or asset ID\n- [x] Generate and display QR labels containing stable asset IDs\n- [ ] Print QR labels and enforce concurrency-safe duplicate-serial uniqueness
+- [x] Add camera barcode/QR scanning and locate assets by scanned serial or asset ID\n- [x] Generate and display QR labels containing stable asset IDs\n- [ ] Print QR labels\n- [x] Enforce concurrency-safe serial reservations in Firestore transactions (legacy index backfill remains a deployment task)
 - [x] Add transactional custody return, asset status restoration, and movement history
 - [x] Add transactional asset transfer between active offices with movement audit
 - [x] Add transactional custody transfer between employees with movement audit\n- [ ] Add printable custody forms and approval flow
