@@ -50,7 +50,7 @@ beforeEach(async () => {
       brand: 'Lenovo', model: 'ThinkCentre', status: 'assigned',
       officeName: 'تقنية المعلومات',
     });
-    await setDoc(doc(db, 'custody_cards', 'card-1'), {
+    await setDoc(doc(db, 'custody_cards', 'card-2'), {
       assetId: 'asset-2', assetLabel: 'Lenovo ThinkCentre',
       employeeName: 'Test Employee', officeName: 'تقنية المعلومات',
       status: 'active', approvalStatus: 'pending',
@@ -96,12 +96,12 @@ test('custody assignment requires atomic asset reservation and pending approval'
 
 test('only the authenticated approver can approve a pending custody card', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
-  await assertFails(updateDoc(doc(db, 'custody_cards', 'card-1'), {
+  await assertFails(updateDoc(doc(db, 'custody_cards', 'card-2'), {
     approvalStatus: 'approved',
     approvedBy: 'another-user',
     approvedAt: new Date(),
   }));
-  await assertSucceeds(updateDoc(doc(db, 'custody_cards', 'card-1'), {
+  await assertSucceeds(updateDoc(doc(db, 'custody_cards', 'card-2'), {
     approvalStatus: 'approved',
     approvedBy: 'admin-1',
     approvedAt: new Date(),
@@ -112,7 +112,7 @@ test('rejection must close the card and release its assigned asset atomically', 
   const db = env.authenticatedContext('admin-1').firestore();
   await assertSucceeds(runTransaction(db, async (tx) => {
     tx.update(doc(db, 'assets', 'asset-2'), { status: 'available' });
-    tx.update(doc(db, 'custody_cards', 'card-1'), {
+    tx.update(doc(db, 'custody_cards', 'card-2'), {
       status: 'rejected',
       approvalStatus: 'rejected',
       rejectedBy: 'admin-1',
