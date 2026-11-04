@@ -348,7 +348,8 @@ class _CustodyScreenState extends State<CustodyScreen> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        '${record.assetLabel} • ${record.officeName}',
+                        '${record.assetLabel} • ${record.officeName}'
+                        '${pending ? ' • بانتظار الاعتماد' : ''}',
                       ),
                       trailing: pending
                           ? Wrap(
