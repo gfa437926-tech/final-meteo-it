@@ -36,7 +36,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
     );
     if (picked == null || picked.files.isEmpty) return;
     final file = picked.files.single;
-    final Uint8List? bytes = file.bytes;
+    final bytes = file.bytes;
     if (bytes == null || bytes.isEmpty) {
       _message('تعذر قراءة الملف المحدد');
       return;
