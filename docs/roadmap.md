@@ -35,7 +35,7 @@
 - [x] Add chronological asset movement history screen
 - [ ] Add service history views and spare-parts records
 - [ ] Add purchase/receipt records, warranties, invoices, and file attachments
-- [ ] Add office/asset reports and Excel/CSV/PDF exports
+- [x] Add live inventory summary and Arabic CSV report copy/export-to-clipboard\n- [ ] Add downloadable Excel/CSV/PDF exports and filtered office/asset reports
 - [ ] Add Google Sheets import/export with validation and audit trail
 - [ ] Add Firebase Emulator security tests and backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
