@@ -107,6 +107,8 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
           if (candidate.name == statusValue) status = candidate;
         }
         if (status == null) errors.add('حالة الجهاز غير صالحة');
+        if (status == AssetStatus.assigned) errors.add('لا يمكن استيراد جهاز بعهدة دون بطاقة عهدة مرتبطة');
+        if (status == AssetStatus.maintenance) errors.add('لا يمكن استيراد جهاز قيد الصيانة دون طلب صيانة مرتبط');
         final officeId = valueAt(row, 'office_id');
         final office = officeId.isEmpty ? null : offices[officeId];
         if (officeId.isNotEmpty && office == null) {
@@ -168,14 +170,14 @@ class _AssetImportScreenState extends State<AssetImportScreen> {
         await repository.createAsset(row.asset);
         success++;
       } catch (error) {
+        row.errors.add('تعذر الاستيراد: $error');
         failures.add('السطر ${row.rowNumber}: $error');
       }
     }
     if (!mounted) return;
     setState(() {
       importing = false;
-      rows = rows.where((row) =>
-          !row.valid || failures.any((failure) => failure.startsWith('السطر ${row.rowNumber}:'))).toList();
+      rows = rows.where((row) => !row.valid).toList();
     });
     await showDialog<void>(
       context: context,
