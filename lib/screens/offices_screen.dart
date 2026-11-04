@@ -1,26 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:metra_it_assets/models/office.dart';
-
-class OfficesScreen extends StatelessWidget {
-  const OfficesScreen({super.key});
-  static const sampleOffices = <Office>[];
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('دليل المكاتب')),
-    body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      Row(children: [
-        const Expanded(child: Text('المكاتب ومراكز العمل', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-        FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.add), label: const Text('إضافة مكتب')),
-      ]),
-      const SizedBox(height: 18),
-      TextField(decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'ابحث باسم المكتب أو المديرية', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)))),
-      const SizedBox(height: 18),
-      Expanded(child: Card(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.business_outlined, size: 54, color: Colors.blueGrey.shade300),
-        const SizedBox(height: 12),
-        const Text('لا توجد مكاتب مسجلة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        const Text('اربط Firestore أو أضف أول مكتب لبدء الجرد'),
-      ])))),
-    ])),
-  );
+import 'package:metra_it_assets/services/office_repository.dart';
+class OfficesScreen extends StatefulWidget { const OfficesScreen({super.key}); @override State<OfficesScreen> createState()=>_OfficesScreenState(); }
+class _OfficesScreenState extends State<OfficesScreen>{
+ final repo=OfficeRepository(); final search=TextEditingController();
+ @override void dispose(){search.dispose();super.dispose();}
+ Future<void> addOffice() async {
+  final name=TextEditingController(),building=TextEditingController(),directorate=TextEditingController(),department=TextEditingController(),room=TextEditingController(),manager=TextEditingController();final key=GlobalKey<FormState>();
+  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('إضافة مكتب أو مركز عمل'),content:SizedBox(width:440,child:Form(key:key,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[_input(name,'اسم المكتب',true),_input(directorate,'المديرية'),_input(department,'القسم'),_input(building,'المبنى'),_input(room,'رقم الغرفة'),_input(manager,'المسؤول')])))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,key.currentState!.validate()),child:const Text('حفظ'))]));
+  if(ok==true){try{await repo.save(Office(id:const Uuid().v4(),name:name.text,building:building.text,directorate:directorate.text,department:department.text,room:room.text,manager:manager.text));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر الحفظ: $e')));}}
+  name.dispose();building.dispose();directorate.dispose();department.dispose();room.dispose();manager.dispose();
+ }
+ static Widget _input(TextEditingController c,String label,[bool required=false])=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextFormField(controller:c,validator:required?(v)=>v==null||v.trim().isEmpty?'هذا الحقل مطلوب':null:null,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder())));
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('دليل المكاتب')),floatingActionButton:FloatingActionButton.extended(onPressed:addOffice,icon:const Icon(Icons.add),label:const Text('إضافة مكتب')),body:Padding(padding:const EdgeInsets.all(20),child:Column(children:[TextField(controller:search,onChanged:(_)=>setState((){}),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'ابحث باسم المكتب أو المديرية أو القسم',border:OutlineInputBorder())),const SizedBox(height:16),Expanded(child:StreamBuilder<List<Office>>(stream:repo.watchOffices(),builder:(context,s){if(s.hasError)return Center(child:Text('تعذر تحميل المكاتب: ${s.error}'));if(!s.hasData)return const Center(child:CircularProgressIndicator());final q=search.text.toLowerCase().trim();final rows=s.data!.where((o)=>'${o.name} ${o.directorate} ${o.department} ${o.manager}'.toLowerCase().contains(q)).toList();if(rows.isEmpty)return const Center(child:Text('لا توجد مكاتب مطابقة. أضف أول مكتب للبدء.'));return ListView.separated(itemCount:rows.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(context,i){final o=rows[i];return Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.business)),title:Text(o.name,style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text([o.directorate,o.department,o.building,o.room].where((x)=>x.isNotEmpty).join(' • ')),trailing:Text(o.manager.isEmpty?'':o.manager)));});}))])));
 }
