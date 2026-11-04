@@ -6,7 +6,7 @@ void main() {
   test('purchase record serializes invoice, amount, and warranty dates', () {
     final purchaseDate = DateTime(2026, 5, 12);
     final warrantyDate = DateTime(2028, 5, 12);
-    const record = PurchaseRecord(
+    final record = PurchaseRecord(
       id: 'purchase-001',
       assetId: 'asset-001',
       assetLabel: 'Dell OptiPlex',
