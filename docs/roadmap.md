@@ -18,7 +18,7 @@
 
 ## Remaining before operational pilot
 - [ ] Verify latest CI run and fix any remaining analyzer/test failures
-- [ ] Configure dedicated Firebase project and platform files
+- [ ] Configure dedicated Firebase project, FlutterFire platform files, and deploy Firestore/Storage rules
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
 - [ ] Implement trusted user provisioning and office-scoped permissions
@@ -40,7 +40,7 @@
 - [x] Add asset document upload, metadata register, protected Storage paths, and authenticated file sharing
 - [ ] Extend attachments to purchase invoices and receipts
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
-- [ ] Add PDF exports and office-specific report filters
+- [ ] Add PDF exports
 - [ ] Add Google Sheets import/export with validation and audit trail
 - [ ] Add Firebase Emulator security tests and backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
