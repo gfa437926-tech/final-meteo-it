@@ -100,10 +100,12 @@ class AssetRepository {
         oldSerialSnapshot = await tx.get(oldSerialRef);
       }
 
-      if (newSerial.isNotEmpty && serialChanged) {
+      if (newSerial.isNotEmpty) {
         newSerialRef = _serialRef(newSerial);
         newSerialSnapshot = await tx.get(newSerialRef);
-        if (newSerialSnapshot.exists) {
+        final reservedAssetId =
+            newSerialSnapshot.data()?['assetId'] as String?;
+        if (newSerialSnapshot.exists && reservedAssetId != asset.id) {
           throw StateError('الرقم التسلسلي مسجل لجهاز آخر');
         }
       }
@@ -114,7 +116,7 @@ class AssetRepository {
           oldSerialSnapshot?.data()?['assetId'] == asset.id) {
         tx.delete(oldSerialRef);
       }
-      if (serialChanged && newSerialRef != null) {
+      if (newSerialRef != null && !newSerialSnapshot!.exists) {
         tx.set(newSerialRef, {
           'assetId': asset.id,
           'serialNumber': newSerial,
