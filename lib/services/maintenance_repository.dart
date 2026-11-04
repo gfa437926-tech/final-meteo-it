@@ -24,7 +24,6 @@ class MaintenanceRepository {
       'maintenanceId': record.id, 'notes': record.title,
     });
   });
-}
 
   Future<void> complete(MaintenanceRecord record, {required String resolution, required double cost}) =>
       db.runTransaction((tx) async {
