@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
@@ -197,12 +196,12 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
 </header>
 <section class="summary">
 <div class="card"><h2>إجمالي الأصول</h2><div class="total">${documents.length}</div></div>
-<div class="card"><h2>التوزيع حسب التصنيف</h2><ul>${categorySummary}</ul></div>
-<div class="card"><h2>التوزيع حسب الحالة</h2><ul>${statusSummary}</ul></div>
+<div class="card"><h2>التوزيع حسب التصنيف</h2><ul>$categorySummary</ul></div>
+<div class="card"><h2>التوزيع حسب الحالة</h2><ul>$statusSummary</ul></div>
 </section>
 <table>
 <thead><tr><th>معرّف الأصل</th><th>التصنيف</th><th>الشركة</th><th>الطراز</th><th>الرقم التسلسلي</th><th>الحالة</th><th>المكتب</th></tr></thead>
-<tbody>${rows}</tbody>
+<tbody>$rows</tbody>
 </table>
 <footer>وثيقة مولدة آلياً • يرجى مراجعة البيانات مع سجل الأصول قبل اعتمادها رسمياً</footer>
 <div class="no-print" style="text-align:center;margin-top:18px"><button onclick="window.print()">طباعة / حفظ كملف PDF</button></div>
