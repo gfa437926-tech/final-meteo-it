@@ -19,6 +19,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String? statusFilter;
   String? officeFilter;
 
+  String _safeCell(Object? value) {
+    final text = value?.toString() ?? '';
+    if (RegExp(r'^\\s*[=+@\\-]').hasMatch(text) ||
+        text.startsWith('\\t') || text.startsWith('\\r')) {
+      return \"'$text\";
+    }
+    return text;
+  }
+  String? officeFilter;
+
   Future<void> _copyCsv(
     BuildContext context,
     List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
@@ -28,13 +38,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ...documents.map((document) {
         final data = document.data();
         return [
-          document.id,
-          _categoryLabel(data['category'] as String? ?? 'other'),
-          data['brand'] ?? '',
-          data['model'] ?? '',
-          data['serialNumber'] ?? '',
-          _statusLabel(data['status'] as String? ?? 'available'),
-          data['officeName'] ?? '',
+          _safeCell(document.id),
+          _safeCell(_categoryLabel(data['category'] as String? ?? 'other')),
+          _safeCell(data['brand']),
+          _safeCell(data['model']),
+          _safeCell(data['serialNumber']),
+          _safeCell(_statusLabel(data['status'] as String? ?? 'available')),
+          _safeCell(data['officeName']),
         ];
       }),
     ];
@@ -65,13 +75,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     for (final document in documents) {
       final data = document.data();
       sheet.appendRow([
-        TextCellValue(document.id),
-        TextCellValue(_categoryLabel(data['category'] as String? ?? 'other')),
-        TextCellValue(data['brand']?.toString() ?? ''),
-        TextCellValue(data['model']?.toString() ?? ''),
-        TextCellValue(data['serialNumber']?.toString() ?? ''),
-        TextCellValue(_statusLabel(data['status'] as String? ?? 'available')),
-        TextCellValue(data['officeName']?.toString() ?? ''),
+        TextCellValue(_safeCell(document.id)),
+        TextCellValue(_safeCell(_categoryLabel(data['category'] as String? ?? 'other'))),
+        TextCellValue(_safeCell(data['brand'])),
+        TextCellValue(_safeCell(data['model'])),
+        TextCellValue(_safeCell(data['serialNumber'])),
+        TextCellValue(_safeCell(_statusLabel(data['status'] as String? ?? 'available'))),
+        TextCellValue(_safeCell(data['officeName'])),
       ]);
     }
     final bytes = workbook.encode();
@@ -99,13 +109,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ...documents.map((document) {
         final data = document.data();
         return [
-          document.id,
-          _categoryLabel(data['category'] as String? ?? 'other'),
-          data['brand'] ?? '',
-          data['model'] ?? '',
-          data['serialNumber'] ?? '',
-          _statusLabel(data['status'] as String? ?? 'available'),
-          data['officeName'] ?? '',
+          _safeCell(document.id),
+          _safeCell(_categoryLabel(data['category'] as String? ?? 'other')),
+          _safeCell(data['brand']),
+          _safeCell(data['model']),
+          _safeCell(data['serialNumber']),
+          _safeCell(_statusLabel(data['status'] as String? ?? 'available')),
+          _safeCell(data['officeName']),
         ];
       }),
     ];
