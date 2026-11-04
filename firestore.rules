@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return signedIn() && userDoc().role in ['admin', 'it_manager']; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+    match /offices/{officeId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /assets/{assetId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /{collection}/{document=**} {
+      allow read: if signedIn() && collection in [
+        'asset_categories', 'asset_models', 'custody_cards', 'custody_items',
+        'asset_movements', 'asset_documents', 'maintenance_records',
+        'purchase_records', 'audit_logs'
+      ];
+      allow write: if isAdmin() && collection in [
+        'asset_categories', 'asset_models', 'custody_cards', 'custody_items',
+        'asset_movements', 'asset_documents', 'maintenance_records',
+        'purchase_records', 'audit_logs'
+      ];
+    }
+  }
+}
