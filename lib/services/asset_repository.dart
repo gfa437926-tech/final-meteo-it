@@ -33,8 +33,10 @@ class AssetRepository {
     final ref = _assets.doc(asset.id);
     final snap = await tx.get(ref);
     if (!snap.exists) throw StateError('الجهاز غير موجود');
-    if (snap.data()?['status'] == AssetStatus.retired.name) {
-      throw StateError('الجهاز مستبعد مسبقاً');
+    final currentStatus = snap.data()?['status'] as String? ?? AssetStatus.available.name;
+    if (currentStatus == AssetStatus.retired.name) throw StateError('الجهاز مستبعد مسبقاً');
+    if (currentStatus == AssetStatus.assigned.name || currentStatus == AssetStatus.maintenance.name) {
+      throw StateError('يجب إغلاق العهدة أو طلب الصيانة قبل استبعاد الجهاز');
     }
     tx.update(ref, {'status': AssetStatus.retired.name, 'retiredAt': FieldValue.serverTimestamp(), 'retirementReason': reason.trim()});
     final movement = _db.collection('asset_movements').doc();
