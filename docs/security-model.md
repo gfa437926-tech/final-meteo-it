@@ -48,3 +48,12 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - Storage reads require an active user profile; uploads require an active `admin` or `it_manager` profile.
 - Upload rules restrict content types and enforce a 10 MB limit. Client-side upload and download are performed through authenticated Firebase Storage SDK calls.
 - Storage updates and deletes are denied from the client. Deploy and verify `storage.rules` before enabling this feature.
+
+
+## Custody approval workflow
+
+- New custody cards are created with `approvalStatus: pending`; the asset is reserved as assigned in the same transaction to prevent a second active handover.
+- An active admin/IT-manager can approve a pending card. The approval actor and server timestamp are recorded, and an immutable movement event is added.
+- Rejection requires the card to remain pending and the linked asset to remain assigned. The transaction closes the card, restores the asset to available, records the rejection actor/reason, and writes a movement event.
+- Pending cards cannot be returned or transferred. Legacy cards without an approval field are treated as approved for compatibility.
+- Current approval permission is shared by admin and IT-manager roles; separation-of-duties and office-scoped approvers remain future authorization work.
