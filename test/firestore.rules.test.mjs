@@ -46,6 +46,15 @@ beforeEach(async () => {
       brand: 'Dell', model: 'OptiPlex', status: 'available',
       officeName: 'تقنية المعلومات',
     });
+    await setDoc(doc(db, 'assets', 'asset-2'), {
+      brand: 'Lenovo', model: 'ThinkCentre', status: 'assigned',
+      officeName: 'تقنية المعلومات',
+    });
+    await setDoc(doc(db, 'custody_cards', 'card-1'), {
+      assetId: 'asset-2', assetLabel: 'Lenovo ThinkCentre',
+      employeeName: 'Test Employee', officeName: 'تقنية المعلومات',
+      status: 'active', approvalStatus: 'pending',
+    });
   });
 });
 
@@ -86,14 +95,6 @@ test('custody assignment requires atomic asset reservation and pending approval'
 });
 
 test('only the authenticated approver can approve a pending custody card', async () => {
-  await env.withSecurityRulesDisabled(async (context) => {
-    await setDoc(doc(context.firestore(), 'assets', 'asset-1'), {
-      status: 'assigned', officeName: 'تقنية المعلومات',
-    });
-    await setDoc(doc(context.firestore(), 'custody_cards', 'card-1'), {
-      assetId: 'asset-1', status: 'active', approvalStatus: 'pending',
-    });
-  });
   const db = env.authenticatedContext('admin-1').firestore();
   await assertFails(updateDoc(doc(db, 'custody_cards', 'card-1'), {
     approvalStatus: 'approved',
@@ -108,18 +109,9 @@ test('only the authenticated approver can approve a pending custody card', async
 });
 
 test('rejection must close the card and release its assigned asset atomically', async () => {
-  await env.withSecurityRulesDisabled(async (context) => {
-    const db = context.firestore();
-    await setDoc(doc(db, 'assets', 'asset-1'), {
-      status: 'assigned', officeName: 'تقنية المعلومات',
-    });
-    await setDoc(doc(db, 'custody_cards', 'card-1'), {
-      assetId: 'asset-1', status: 'active', approvalStatus: 'pending',
-    });
-  });
   const db = env.authenticatedContext('admin-1').firestore();
   await assertSucceeds(runTransaction(db, async (tx) => {
-    tx.update(doc(db, 'assets', 'asset-1'), { status: 'available' });
+    tx.update(doc(db, 'assets', 'asset-2'), { status: 'available' });
     tx.update(doc(db, 'custody_cards', 'card-1'), {
       status: 'rejected',
       approvalStatus: 'rejected',
@@ -128,7 +120,7 @@ test('rejection must close the card and release its assigned asset atomically', 
       rejectionReason: 'Invalid request',
     });
   }));
-  const asset = await getDoc(doc(db, 'assets', 'asset-1'));
+  const asset = await getDoc(doc(db, 'assets', 'asset-2'));
   assert.equal(asset.data().status, 'available');
 });
 
