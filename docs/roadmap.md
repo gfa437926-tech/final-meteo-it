@@ -19,10 +19,12 @@
 ## Remaining before operational pilot
 - [ ] Verify latest CI run and fix any remaining analyzer/test failures
 - [ ] Configure dedicated Firebase project and platform files
-- [ ] Implement sign-in, user provisioning, role management, and office-scoped permissions
+- [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
+- [ ] Implement trusted user provisioning, full role management, and office-scoped permissions
 - [x] Add asset editing and safe retirement with movement history
 - [ ] Add barcode/QR identifiers and concurrency-safe duplicate-serial enforcement
 - [x] Add transactional custody return, asset status restoration, and movement history
+- [x] Add transactional asset transfer between active offices with movement audit
 - [ ] Add custody transfer, printable custody forms, and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
