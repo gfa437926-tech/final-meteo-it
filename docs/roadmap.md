@@ -46,7 +46,8 @@
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
 - [ ] Add PDF exports
 - [ ] Add Google Sheets import/export with validation and audit trail
-- [ ] Add Firebase Emulator security tests and backup/restore procedures
+- [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job (final emulator run pending)
+- [ ] Verify emulator rules suite passes on the latest commit and add backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
 
 ## Release gate
