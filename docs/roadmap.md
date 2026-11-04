@@ -20,7 +20,8 @@
 - [ ] Verify latest CI run and fix any remaining analyzer/test failures
 - [ ] Configure dedicated Firebase project and platform files
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
-- [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)\n- [ ] Implement trusted user provisioning and office-scoped permissions
+- [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
+- [ ] Implement trusted user provisioning and office-scoped permissions
 - [x] Add asset editing and safe retirement with movement history
 - [x] Add camera barcode/QR scanning and locate assets by scanned serial or asset ID
 - [x] Generate and display QR labels containing stable asset IDs
@@ -35,8 +36,10 @@
 - [x] Add chronological asset movement history screen
 - [x] Add per-asset maintenance service history with ticket timeline and cumulative costs
 - [x] Add spare-parts stock register, low-stock threshold indicators, and transactional issue against open maintenance tickets
-- [x] Add purchase invoice records linked to assets, supplier, amount, purchase date, and warranty expiry\n- [ ] Add invoice/document file attachments and richer receipt workflow
-- [x] Add live inventory summary and Arabic CSV report copy/export-to-clipboard\n- [ ] Add downloadable Excel/CSV/PDF exports and filtered office/asset reports
+- [x] Add purchase invoice records linked to assets, supplier, amount, purchase date, and warranty expiry
+- [ ] Add invoice/document file attachments and richer receipt workflow
+- [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
+- [ ] Add PDF exports and office-specific report filters
 - [ ] Add Google Sheets import/export with validation and audit trail
 - [ ] Add Firebase Emulator security tests and backup/restore procedures
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
