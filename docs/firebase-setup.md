@@ -99,3 +99,17 @@ npx firebase emulators:exec --only firestore,storage --project demo-metra-it-ass
 ```
 
 The GitHub Actions workflow runs these checks independently from Flutter analysis and unit tests. A passing local test run is required before deploying changed rules.
+
+
+## Production hardening and App Check
+
+Before inviting staff:
+
+1. Register each intended Android, Web, and Windows app in the dedicated Firebase project and generate platform configuration with FlutterFire. Keep generated local config out of public commits if it contains environment identifiers that your organization treats as confidential.
+2. Enable Firebase App Check for supported platforms. Start in monitoring mode, inspect legitimate traffic, then enforce it for Firestore and Storage only after all production clients have valid App Check providers configured. Do not enable enforcement blindly before verifying the actual clients.
+3. Use a production App Check provider appropriate to each platform (for example Play Integrity on Android and reCAPTCHA Enterprise on Web). Validate the supported provider path for Windows separately; do not assume parity with Android/Web.
+4. Restrict Authentication sign-in methods to those approved by the organization. Enforce MFA for privileged accounts through the supported Identity Platform/Firebase Authentication configuration.
+5. Complete the serial reservation backfill and a restore drill before bulk import.
+6. Confirm that the actual selected Firebase project is the dedicated asset inventory project before deploying any rules or functions.
+
+The app currently supports the admin and it_manager profile roles only. Office-scoped roles and staff-level data isolation are not implemented; do not use this baseline for a multi-tenant or office-isolated production rollout.
