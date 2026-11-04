@@ -168,7 +168,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
           final items = snapshot.data!.where((a) =>
             (category == null || a.category == category) &&
             (status == null || a.status == status) &&
-            (q.isEmpty || '${a.brand} ${a.model} ${a.serialNumber}'.toLowerCase().contains(q))).toList();
+            (q.isEmpty || '${a.id} ${a.brand} ${a.model} ${a.serialNumber}'.toLowerCase().contains(q))).toList();
           if (items.isEmpty) return const Center(child: Text('لا توجد أجهزة مطابقة لمعايير البحث'));
           return Card(child: ListView.separated(itemCount: items.length, separatorBuilder: (_,__)=>const Divider(height: 1),
             itemBuilder: (context, i) { final a=items[i]; return ListTile(
