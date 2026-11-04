@@ -108,6 +108,7 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                                       final reported = _date(data['reportedAt']);
                                       final completed = _date(data['completedAt']);
                                       final cost = (data['cost'] as num?)?.toDouble() ?? 0;
+                                      final partsCost = (data['partsCost'] as num?)?.toDouble() ?? 0;
                                       return Card(
                                         child: ListTile(
                                           leading: CircleAvatar(
