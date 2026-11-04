@@ -37,7 +37,8 @@
 - [x] Add per-asset maintenance service history with ticket timeline and cumulative costs
 - [x] Add spare-parts stock register, low-stock threshold indicators, and transactional issue against open maintenance tickets
 - [x] Add purchase invoice records linked to assets, supplier, amount, purchase date, and warranty expiry
-- [ ] Add invoice/document file attachments and richer receipt workflow
+- [x] Add asset document upload, metadata register, protected Storage paths, and authenticated file sharing
+- [ ] Extend attachments to purchase invoices and receipts
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
 - [ ] Add PDF exports and office-specific report filters
 - [ ] Add Google Sheets import/export with validation and audit trail
