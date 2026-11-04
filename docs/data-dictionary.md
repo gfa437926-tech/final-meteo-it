@@ -50,6 +50,6 @@ Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`,
 
 
 ## asset_documents
-`assetId, fileName, documentType, storagePath, contentType, sizeBytes, uploadedBy, createdAt`
+`assetId, purchaseRecordId?, fileName, documentType, storagePath, contentType, sizeBytes, uploadedBy, createdAt`
 
 Supported document types: `invoice`, `warranty`, `handover`, `maintenance`, `photo`, and `other`. File bytes are stored in Firebase Storage; the Firestore record stores metadata and a private storage path.
