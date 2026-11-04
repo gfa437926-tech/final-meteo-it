@@ -4,7 +4,7 @@ import 'package:metra_it_assets/services/custody_repository.dart';
 void main() {
   test('custody record serializes normalized employee and office names', () {
     final assignedAt = DateTime.utc(2026, 11, 5, 10);
-    const record = CustodyRecord(
+    final record = CustodyRecord(
       id: 'custody-1',
       assetId: 'asset-1',
       assetLabel: 'Dell OptiPlex',
