@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/models/office.dart';
 import 'package:metra_it_assets/screens/asset_form_screen.dart';
 import 'package:metra_it_assets/services/asset_repository.dart';
+import 'package:metra_it_assets/services/office_repository.dart';
 
 class AssetsScreen extends StatefulWidget {
   const AssetsScreen({super.key});
@@ -35,6 +37,79 @@ class _AssetsScreenState extends State<AssetsScreen> {
       }
     }
     reason.dispose();
+  }
+
+  Future<void> _transfer(Asset asset) async {
+    final offices = OfficeRepository();
+    final notes = TextEditingController();
+    final key = GlobalKey<FormState>();
+    Office? destination;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('نقل الجهاز إلى مكتب آخر'),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: key,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('الجهاز: ${asset.brand} ${asset.model}'),
+                  const SizedBox(height: 14),
+                  StreamBuilder<List<Office>>(
+                    stream: offices.watchOffices(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) return Text('تعذر تحميل المكاتب: ${snapshot.error}');
+                      if (!snapshot.hasData) return const LinearProgressIndicator();
+                      final available = snapshot.data!.where((o) => o.isActive && o.id != asset.officeId).toList();
+                      if (available.isEmpty) return const Text('لا توجد مكاتب نشطة أخرى. أضف مكتباً أولاً.');
+                      return DropdownButtonFormField<String>(
+                        initialValue: destination?.id,
+                        decoration: const InputDecoration(labelText: 'المكتب الوجهة'),
+                        items: available.map((o) => DropdownMenuItem(value: o.id, child: Text(o.name))).toList(),
+                        onChanged: (id) => setDialog(() {
+                          destination = available.where((o) => o.id == id).firstOrNull;
+                        }),
+                        validator: (_) => destination == null ? 'اختر المكتب الوجهة' : null,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: notes,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'سبب النقل / ملاحظات'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () {
+                if (destination != null && key.currentState!.validate()) Navigator.pop(ctx, true);
+              },
+              child: const Text('تأكيد النقل'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true && destination != null) {
+      try {
+        await repository.transferAsset(asset, destination!, notes: notes.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم نقل الجهاز إلى ${destination!.name} وتسجيل الحركة')),
+        );
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر نقل الجهاز: $e')));
+      }
+    }
+    notes.dispose();
   }
 
   @override
@@ -78,10 +153,12 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   onSelected: (v) {
                     if (v == 'edit') Navigator.push(context, MaterialPageRoute(builder: (_) => AssetFormScreen(initialAsset: a)));
                     if (v == 'retire') _retire(a);
+                    if (v == 'transfer') _transfer(a);
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('تعديل البيانات'))),
                     if (a.status != AssetStatus.retired) const PopupMenuItem(value: 'retire', child: ListTile(dense: true, leading: Icon(Icons.archive_outlined), title: Text('استبعاد من الخدمة'))),
+                    if (a.status == AssetStatus.available || a.status == AssetStatus.returned) const PopupMenuItem(value: 'transfer', child: ListTile(dense: true, leading: Icon(Icons.drive_file_move_outline), title: Text('نقل إلى مكتب آخر'))),
                   ],
                 ),
               ]),
