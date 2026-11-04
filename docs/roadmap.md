@@ -23,7 +23,8 @@
 - [ ] Add asset editing, retirement, barcode/QR identifiers, and stronger duplicate-serial enforcement
 - [ ] Add custody return, transfer, printable custody forms, and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
-- [ ] Add maintenance completion/return-to-service workflow, service history, and spare-parts records
+- [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
+- [ ] Add service history views and spare-parts records
 - [ ] Add purchase/receipt records, warranties, invoices, and file attachments
 - [ ] Add office/asset reports and Excel/CSV/PDF exports
 - [ ] Add Google Sheets import/export with validation and audit trail
