@@ -5,8 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
+import 'package:share_plus/share_plus.dart';
 
 class AssetDocumentsScreen extends StatefulWidget {
   const AssetDocumentsScreen({super.key});
@@ -66,12 +66,10 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
           customMetadata: {'assetId': selectedAssetId!, 'uploadedBy': uid},
         ),
       );
-      final url = await storageRef.getDownloadURL();
       await FirebaseFirestore.instance.collection('asset_documents').doc(documentId).set({
         'assetId': selectedAssetId,
         'fileName': file.name,
         'storagePath': path,
-        'downloadUrl': url,
         'contentType': _contentType(extension),
         'sizeBytes': file.size,
         'uploadedBy': uid,
@@ -82,6 +80,24 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
       _message('تعذر رفع المستند: $error');
     } finally {
       if (mounted) setState(() => uploading = false);
+    }
+  }
+
+  Future<void> _shareDocument(Map<String, dynamic> data) async {
+    try {
+      final path = data['storagePath'] as String? ?? '';
+      if (path.isEmpty) throw StateError('مسار المستند غير متوفر');
+      final bytes = await FirebaseStorage.instance.ref(path).getData(10 * 1024 * 1024);
+      if (bytes == null || bytes.isEmpty) throw StateError('تعذر تنزيل المستند');
+      await Share.shareXFiles([
+        XFile.fromData(
+          bytes,
+          mimeType: data['contentType'] as String? ?? 'application/octet-stream',
+          name: data['fileName'] as String? ?? 'asset-document',
+        ),
+      ], text: 'مستند مرتبط بأصل تقني');
+    } catch (error) {
+      _message('تعذرت مشاركة المستند: $error');
     }
   }
 
@@ -168,14 +184,9 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                                 title: Text(data['fileName'] as String? ?? 'مستند'),
                                 subtitle: Text('${(size / 1024).toStringAsFixed(2)} MB'),
                                 trailing: IconButton(
-                                  tooltip: 'نسخ رابط المستند',
-                                  icon: const Icon(Icons.link),
-                                  onPressed: () async {
-                                    await Clipboard.setData(ClipboardData(
-                                      text: data['downloadUrl'] as String? ?? '',
-                                    ));
-                                    _message('تم نسخ رابط المستند');
-                                  },
+                                  tooltip: 'تنزيل أو مشاركة المستند',
+                                  icon: const Icon(Icons.download_outlined),
+                                  onPressed: () => _shareDocument(data),
                                 ),
                               ),
                             );
