@@ -15,7 +15,7 @@ void main() {
     expect(restored.status, MaintenanceStatus.open);
     expect(restored.priority, 'high');
     expect(restored.previousAssetStatus, 'assigned');
-    expect(restored.reportedAt, date);
+    expect(restored.reportedAt.isAtSameMomentAs(date), isTrue);
     expect(restored.technician, 'فني الاختبار');
   });
 
