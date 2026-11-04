@@ -82,7 +82,11 @@ test('only a super administrator can provision another user profile', async () =
 
   const adminDb = env.authenticatedContext('admin-1').firestore();
   await assertSucceeds(setDoc(doc(adminDb, 'users', 'new-user'), {
-    role: 'it_manager', isActive: true, displayName: 'New User',
+    role: 'it_manager',
+    isActive: true,
+    displayName: 'New User',
+    email: 'new@example.com',
+    createdAt: new Date(),
   }));
 });
 
