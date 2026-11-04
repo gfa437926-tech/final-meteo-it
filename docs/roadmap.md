@@ -20,7 +20,7 @@
 - [ ] Verify latest CI run and fix any remaining analyzer/test failures
 - [ ] Configure dedicated Firebase project and platform files
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
-- [ ] Implement trusted user provisioning, full role management, and office-scoped permissions
+- [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)\n- [ ] Implement trusted user provisioning and office-scoped permissions
 - [x] Add asset editing and safe retirement with movement history
 - [x] Add camera barcode/QR scanning and locate assets by scanned serial or asset ID
 - [x] Generate and display QR labels containing stable asset IDs
