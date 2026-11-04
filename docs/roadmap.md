@@ -21,7 +21,8 @@
 - [ ] Configure dedicated Firebase project and platform files
 - [ ] Implement sign-in, user provisioning, role management, and office-scoped permissions
 - [ ] Add asset editing, retirement, barcode/QR identifiers, and stronger duplicate-serial enforcement
-- [ ] Add custody return, transfer, printable custody forms, and approval flow
+- [x] Add transactional custody return, asset status restoration, and movement history
+- [ ] Add custody transfer, printable custody forms, and approval flow
 - [x] Add maintenance ticket model, live register, and transactional ticket creation with asset status/movement updates
 - [x] Add maintenance completion workflow, resolution/cost capture, asset status restoration, and movement history
 - [ ] Add service history views and spare-parts records
