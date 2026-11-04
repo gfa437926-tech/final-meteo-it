@@ -13,8 +13,11 @@ class MaintenanceRepository {
     final assetRef = db.collection('assets').doc(record.assetId);
     final asset = await tx.get(assetRef);
     if (!asset.exists) throw StateError('الأصل المحدد غير موجود');
-    if (asset.data()?['status'] == 'retired') throw StateError('لا يمكن فتح صيانة لجهاز مستبعد');
     final previousStatus = asset.data()?['status'] as String? ?? 'available';
+    if (previousStatus == 'retired') throw StateError('لا يمكن فتح صيانة لجهاز مستبعد');
+    if (previousStatus == 'assigned' || previousStatus == 'maintenance') {
+      throw StateError('لا يمكن فتح طلب صيانة لجهاز بعهدة موظف أو قيد الصيانة بالفعل');
+    }
     tx.set(records.doc(record.id), {...record.toMap(), 'previousAssetStatus': previousStatus});
     tx.update(assetRef, {'status': 'maintenance'});
     final movement = db.collection('asset_movements').doc();
