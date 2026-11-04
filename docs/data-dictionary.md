@@ -53,3 +53,8 @@ Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`,
 `assetId, purchaseRecordId?, fileName, documentType, storagePath, contentType, sizeBytes, uploadedBy, createdAt`
 
 Supported document types: `invoice`, `warranty`, `handover`, `maintenance`, `photo`, and `other`. File bytes are stored in Firebase Storage; the Firestore record stores metadata and a private storage path.
+
+
+## import_batches
+
+Append-only CSV import audit record: `sourceName, createdBy, createdAt, completedAt, totalRows, attemptedRows, succeededRows, failedRows, skippedInvalidRows, status, rowErrors[]`. Only active admin/IT-manager accounts can create records, the actor UID must match the signed-in user, and clients cannot update or delete a batch record.
