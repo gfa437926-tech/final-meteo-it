@@ -52,7 +52,7 @@ class _AuthenticationGate extends StatelessWidget {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
       final user = auth.data;
-      if (user == null) return const AuthScreen();
+      if (user == null) { return const AuthScreen(); }
       return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
         builder: (context, profile) {
