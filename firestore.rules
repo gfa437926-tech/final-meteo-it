@@ -56,7 +56,7 @@ service cloud.firestore {
       allow create, update: if isAdmin() && collection in [
         'asset_categories', 'asset_models', 'custody_items',
         'asset_movements', 'asset_documents', 'maintenance_records',
-        'purchase_records'
+        'purchase_records', 'spare_parts', 'maintenance_parts'
       ];
       allow delete: if false;
     }
