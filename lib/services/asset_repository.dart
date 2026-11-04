@@ -32,6 +32,7 @@ class AssetRepository {
   Future<void> createAsset(Asset asset) async {
     final serial = _normalizeSerial(asset.serialNumber);
     final assetRef = _assets.doc(asset.id);
+    final assetData = asset.toMap()..['serialNumber'] = serial;
     if (serial.isNotEmpty) {
       final existingAssets = await _assets.get();
       final duplicate = existingAssets.docs.any((doc) =>
@@ -54,7 +55,7 @@ class AssetRepository {
         }
       }
 
-      tx.set(assetRef, asset.toMap());
+      tx.set(assetRef, assetData);
       if (serialRef != null) {
         tx.set(serialRef, {
           'assetId': asset.id,
@@ -68,6 +69,7 @@ class AssetRepository {
   Future<void> updateAsset(Asset asset) async {
     final assetRef = _assets.doc(asset.id);
     final newSerial = _normalizeSerial(asset.serialNumber);
+    final assetData = asset.toMap()..['serialNumber'] = newSerial;
     if (newSerial.isNotEmpty) {
       final existingAssets = await _assets.get();
       final duplicate = existingAssets.docs.any((doc) =>
@@ -106,7 +108,7 @@ class AssetRepository {
         }
       }
 
-      tx.update(assetRef, asset.toMap());
+      tx.update(assetRef, assetData);
 
       if (serialChanged && oldSerialRef != null &&
           oldSerialSnapshot?.data()?['assetId'] == asset.id) {
