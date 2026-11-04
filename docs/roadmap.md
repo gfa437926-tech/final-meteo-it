@@ -44,11 +44,12 @@
 - [x] Show active versus expired warranty state in the purchase register
 - [ ] Add richer receipt workflow and invoice preview
 - [x] Add live inventory summary, Arabic CSV clipboard copy, shareable CSV file, Excel workbook export, and category/status filtered reports
-- [ ] Add PDF exports
+- [x] Add Arabic RTL printable inventory report with filter-aware summaries and browser Print / Save as PDF flow (native embedded-font PDF export remains pending)
 - [x] Define the secure Google Sheets import/export contract and acceptance criteria (implementation remains pending)
 - [ ] Implement Google Sheets import/export with validation, staging preview, idempotent writes, and audit trail
 - [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job (final emulator run pending)
-- [ ] Verify emulator rules suite passes on the latest commit and add backup/restore procedures
+- [x] Document dedicated Firebase Firestore/Storage backup and restore runbook (execution and restore drills remain operational tasks)
+- [ ] Verify emulator rules suite passes on the latest commit and complete a production backup/restore drill
 - [ ] Build and verify Android, Windows, and Web targets; package release artifacts
 
 ## Release gate
