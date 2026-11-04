@@ -46,6 +46,11 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if false;
     }
+    match /maintenance_parts/{usageId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false;
