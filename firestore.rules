@@ -97,6 +97,11 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if false;
     }
+    match /import_batches/{batchId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if false;
+    }
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false;
