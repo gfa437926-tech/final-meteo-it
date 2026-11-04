@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 class AssetDocumentsScreen extends StatefulWidget {
   const AssetDocumentsScreen({super.key});
@@ -126,7 +126,12 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                   final assets = snapshot.data!.docs;
                   if (assets.isEmpty) return const Text('أضف أصلاً أولاً قبل إرفاق المستندات');
                   if (!assets.any((asset) => asset.id == selectedAssetId)) {
-                    selectedAssetId = assets.first.id;
+                    final firstAssetId = assets.first.id;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted && selectedAssetId != firstAssetId) {
+                        setState(() => selectedAssetId = firstAssetId);
+                      }
+                    });
                   }
                   return DropdownButtonFormField<String>(
                     initialValue: selectedAssetId,
