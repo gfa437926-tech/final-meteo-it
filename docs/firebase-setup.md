@@ -113,3 +113,19 @@ Before inviting staff:
 6. Confirm that the actual selected Firebase project is the dedicated asset inventory project before deploying any rules or functions.
 
 The app currently supports the admin and it_manager profile roles only. Office-scoped roles and staff-level data isolation are not implemented; do not use this baseline for a multi-tenant or office-isolated production rollout.
+
+
+## GitHub Pages web configuration
+
+The Pages workflow reads these repository Actions **Variables** and passes them to the Flutter web build as compile-time defines:
+
+- `FIREBASE_API_KEY`
+- `FIREBASE_APP_ID`
+- `FIREBASE_MESSAGING_SENDER_ID`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_AUTH_DOMAIN`
+- `FIREBASE_STORAGE_BUCKET`
+
+Create a Firebase **Web app** inside the dedicated IT inventory Firebase project, then copy the corresponding values from its Firebase SDK configuration into the repository's Settings → Secrets and variables → Actions → Variables. These web configuration values identify the Firebase app; they are not Admin SDK credentials. Never put service-account JSON, private keys, or Admin SDK credentials in Actions Variables, Dart defines, or the Flutter client.
+
+Until all six values are configured, the Pages site deliberately displays a clear Firebase setup screen instead of attempting an anonymous or guessed connection. Native Android/Windows builds must use their own FlutterFire-generated platform options. This setup does not create a Firebase project, enable billing/services, provision users, or deploy security rules.
