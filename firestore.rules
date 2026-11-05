@@ -124,9 +124,40 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if false;
     }
+    function validImportBatch(data) {
+      return data.keys().hasOnly([
+          'sourceName', 'createdBy', 'createdAt', 'completedAt',
+          'totalRows', 'attemptedRows', 'succeededRows', 'failedRows',
+          'skippedInvalidRows', 'status', 'rowErrors'
+        ]) &&
+        data.keys().hasAll([
+          'sourceName', 'createdBy', 'createdAt', 'completedAt',
+          'totalRows', 'attemptedRows', 'succeededRows', 'failedRows',
+          'skippedInvalidRows', 'status', 'rowErrors'
+        ]) &&
+        data.sourceName is string && data.sourceName.size() <= 255 &&
+        data.createdBy is string && data.createdAt is timestamp &&
+        data.completedAt is timestamp &&
+        data.totalRows is int && data.totalRows >= 0 && data.totalRows <= 100 &&
+        data.attemptedRows is int && data.attemptedRows >= 0 &&
+        data.succeededRows is int && data.succeededRows >= 0 &&
+        data.failedRows is int && data.failedRows >= 0 &&
+        data.skippedInvalidRows is int && data.skippedInvalidRows >= 0 &&
+        data.attemptedRows + data.skippedInvalidRows == data.totalRows &&
+        data.succeededRows + data.failedRows == data.attemptedRows &&
+        data.status in ['completed', 'partial', 'failed'] &&
+        data.rowErrors is list && data.rowErrors.size() == data.failedRows &&
+        data.rowErrors.size() <= 100 &&
+        ((data.failedRows == 0 && data.status == 'completed') ||
+          (data.failedRows > 0 && data.succeededRows > 0 && data.status == 'partial') ||
+          (data.failedRows > 0 && data.succeededRows == 0 && data.status == 'failed'));
+    }
+
     match /import_batches/{batchId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow create: if isAdmin() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        validImportBatch(request.resource.data);
       allow update, delete: if false;
     }
     match /audit_logs/{logId} {
