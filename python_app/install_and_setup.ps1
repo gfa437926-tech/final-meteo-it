@@ -68,6 +68,11 @@ try {
     & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE meteo_inventory OWNER inventory_app'
     if ($LASTEXITCODE -ne 0) { throw 'تعذر إنشاء قاعدة البيانات.' }
   }
+  Step 'ضبط ملكية قاعدة البيانات وصلاحيات التطبيق'
+  & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'ALTER DATABASE meteo_inventory OWNER TO inventory_app'
+  if ($LASTEXITCODE -ne 0) { throw 'تعذر ضبط مالك قاعدة البيانات.' }
+  & $psql -h localhost -p 5432 -U postgres -d meteo_inventory -v ON_ERROR_STOP=1 -c 'GRANT USAGE, CREATE ON SCHEMA public TO inventory_app; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO inventory_app; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO inventory_app'
+  if ($LASTEXITCODE -ne 0) { throw 'تعذر ضبط صلاحيات مخطط قاعدة البيانات.' }
   Step 'تطبيق مخطط الجداول بصلاحيات مستخدم التطبيق'
   $env:PGPASSWORD = $appPassword
   & $psql -h localhost -p 5432 -U inventory_app -d meteo_inventory -v ON_ERROR_STOP=1 -f (Join-Path $AppDir 'schema_postgres.sql')
