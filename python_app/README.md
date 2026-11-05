@@ -1,46 +1,38 @@
 # نسخة Python لإدارة وجرد أصول تقنية المعلومات
 
-هذه نسخة مستقلة عن تطبيق Flutter الموجود في جذر المستودع. لا تستخدم Firebase ولا تتصل بأي قاعدة بيانات خارجية. تحفظ البيانات محلياً في ملف Excel بصيغة `.xlsx`.
+تطبيق مستقل عن Flutter. لا يستخدم Firebase أو Docker. يدعم Excel أو PostgreSQL مثبتاً مباشرة على Windows.
 
-## التشغيل على Windows
+## إعداد PostgreSQL المحلي
+1. ثبّت PostgreSQL for Windows من https://www.postgresql.org/download/windows/ وثبّت pgAdmin 4.
+2. احتفظ بالمنفذ 5432.
+3. أنشئ مستخدماً مخصصاً وقاعدة بيانات جديدة باسم meteo_inventory (لا تستخدم أي قاعدة قديمة).
+4. افتح Query Tool على قاعدة meteo_inventory ونفّذ محتويات schema_postgres.sql.
+5. انسخ .env.example إلى .env، وعدّل كلمة مرور المستخدم في INVENTORY_DATABASE_URL. لا ترفع .env إلى GitHub.
+6. شغّل run_windows.bat.
 
-1. ثبّت Python 3.11 أو أحدث.
-2. افتح مجلد `python_app`.
-3. شغّل `run_windows.bat`.
+مثال اتصال: postgresql://inventory_user:YOUR_PASSWORD@localhost:5432/meteo_inventory
 
-أو نفّذ:
-
-```powershell
-py -3 -m pip install -r requirements.txt
-py -3 main.py
+مثال إنشاء المستخدم والقاعدة من pgAdmin كمسؤول:
+```sql
+CREATE ROLE inventory_user LOGIN PASSWORD 'CHANGE_THIS_PASSWORD';
+CREATE DATABASE meteo_inventory OWNER inventory_user;
 ```
 
-ينشأ ملف `data/inventory.xlsx` تلقائياً عند أول تشغيل.
+## التخزين
+- PostgreSQL: INVENTORY_STORAGE=postgres.
+- Excel: INVENTORY_STORAGE=excel.
+- لا يتم نقل بيانات Excel تلقائياً أو حذفها عند التبديل.
 
-## أوراق ملف Excel
+## الجداول
+assets, offices, custody, maintenance, purchases, spare_parts, audit_logs.
+قيد فريد يمنع تكرار الرقم التسلسلي للأصل، وسجل تدقيق للعمليات.
 
-- Assets: الأصول والأجهزة.
-- Offices: المكاتب والمواقع.
-- Custody: سجلات العهد والتسليم والاستلام.
-- Maintenance: الصيانة.
-- Purchases: المشتريات والفواتير.
-- SpareParts: قطع الغيار.
-- AuditLog: سجل العمليات.
+## الاختبارات
+```powershell
+py -3 -m pip install -r requirements.txt
+py -3 -m unittest discover -v
+```
+اختبارات الاتصال الفعلية تحتاج PostgreSQL محلياً مُعداً. لا تستخدم قاعدة الإنتاج للاختبارات.
 
-يمكن فتح ملف Excel وقراءة البيانات أو إعداد تقارير منه. أغلق البرنامج قبل تحرير الملف يدوياً.
-
-## حماية البيانات
-
-- حفظ ذري للملف لتقليل احتمال تلفه عند انقطاع البرنامج أثناء الحفظ.
-- نسخة احتياطية مؤرخة قبل كل عملية حفظ.
-- منع تشغيل نسختين من البرنامج على ملف البيانات نفسه في الوقت ذاته.
-- التحقق من تكرار الرقم التسلسلي للأصل.
-- لا تُحفظ كلمات مرور أو أسرار Firebase؛ هذا الإصدار لا يستخدم Firebase أصلاً.
-
-## حدود Excel كقاعدة بيانات
-
-هذا الإصدار مخصص حالياً للتشغيل المحلي على جهاز واحد. Excel ليس قاعدة بيانات متعددة المستخدمين ولا يوفر معاملات أو صلاحيات قوية. لا تشغّل عدة نسخ على ملف مشترك عبر الشبكة. عند الحاجة إلى عمل متزامن لعدة موظفين، يلزم الانتقال إلى قاعدة بيانات فعلية مثل SQLite محلياً أو SQL Server للشبكة.
-
-## حالة الإصدار
-
-هذه نواة تشغيلية أولى لإدارة السجلات الأساسية، وليست بعدُ بديلاً مكتملاً لكل شاشات Flutter. ستتم إضافة المطابقة الوظيفية والتقارير المتقدمة والاستيراد والتصدير والطباعة والنسخة التنفيذية Windows على مراحل، مع إبقاء تطبيق Flutter دون تغيير.
+## الأمان
+استخدم مستخدماً محدود الصلاحيات، وكلمة مرور قوية، واتصالات localhost فقط. احفظ .env خارج GitHub. PostgreSQL المحلي هو محرك PostgreSQL وليس حزمة Supabase الكاملة، ولا يتطلب Docker.
