@@ -7,7 +7,7 @@
 - The application currently admits only `admin` and `it_manager` roles.
 - A super administrator (`admin`) can create and update profile documents for other Firebase Authentication accounts.
 - The application does not create Authentication accounts or passwords. Create accounts through a trusted Firebase Admin SDK process or the Firebase Console, then register their UID in the application.
-- Users may update only their own `displayName`, `email`, and `updatedAt` profile fields; they cannot change their own role or active state.
+- Active users may update only their own `displayName`, `email`, and `updatedAt` profile fields; inactive accounts cannot use self-service profile updates, and users cannot change their own role or active state.
 - User deletion is disabled from the client.
 
 ## Current permission matrix
