@@ -20,6 +20,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
   final repository = AssetRepository();
   AssetCategory? category;
   AssetStatus? status;
+  String? officeId;
+  final officeRepository = OfficeRepository();
   @override
   void dispose() { search.dispose(); super.dispose(); }
 
@@ -254,6 +256,35 @@ class _AssetsScreenState extends State<AssetsScreen> {
           items: AssetCategory.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>category=v))),
         SizedBox(width: 220, child: DropdownButtonFormField<AssetStatus>(initialValue: status, decoration: const InputDecoration(labelText: 'الحالة'),
           items: AssetStatus.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>status=v))),
+        SizedBox(
+          width: 240,
+          child: StreamBuilder<List<Office>>(
+            stream: officeRepository.watchOffices(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const InputDecorator(
+                  decoration: InputDecoration(labelText: 'المكتب'),
+                  child: LinearProgressIndicator(),
+                );
+              }
+              final offices = snapshot.data!;
+              return DropdownButtonFormField<String>(
+                initialValue: officeId ?? '',
+                decoration: const InputDecoration(labelText: 'تصفية حسب المكتب'),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('جميع المكاتب')),
+                  ...offices.map((office) => DropdownMenuItem(
+                    value: office.id,
+                    child: Text(office.name),
+                  )),
+                ],
+                onChanged: (value) => setState(() {
+                  officeId = value == null || value.isEmpty ? null : value;
+                }),
+              );
+            },
+          ),
+        ),
       ]),
       const SizedBox(height: 18),
       Expanded(child: StreamBuilder<List<Asset>>(
@@ -265,13 +296,14 @@ class _AssetsScreenState extends State<AssetsScreen> {
           final items = snapshot.data!.where((a) =>
             (category == null || a.category == category) &&
             (status == null || a.status == status) &&
-            (q.isEmpty || '${a.id} ${a.brand} ${a.model} ${a.serialNumber}'.toLowerCase().contains(q))).toList();
+            (officeId == null || a.officeId == officeId) &&
+            (q.isEmpty || '${a.id} ${a.brand} ${a.model} ${a.serialNumber} ${a.officeName ?? ''}'.toLowerCase().contains(q))).toList();
           if (items.isEmpty) return const Center(child: Text('لا توجد أجهزة مطابقة لمعايير البحث'));
           return Card(child: ListView.separated(itemCount: items.length, separatorBuilder: (_,__)=>const Divider(height: 1),
             itemBuilder: (context, i) { final a=items[i]; return ListTile(
               leading: const CircleAvatar(child: Icon(Icons.devices_other)),
               title: Text('${a.brand} ${a.model}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${a.category.label} • الرقم التسلسلي: ${a.serialNumber.isEmpty ? 'غير محدد' : a.serialNumber}'),
+              subtitle: Text('${a.category.label} • المكتب: ${a.officeName?.isNotEmpty == true ? a.officeName : 'غير محدد'} • الرقم التسلسلي: ${a.serialNumber.isEmpty ? 'غير محدد' : a.serialNumber}'),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                 Chip(label: Text(a.status.label)),
                 PopupMenuButton<String>(
