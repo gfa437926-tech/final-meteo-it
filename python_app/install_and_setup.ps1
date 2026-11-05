@@ -97,8 +97,16 @@ INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/me
     & .\.venv\Scripts\python.exe -c "import psycopg,os; psycopg.connect(os.environ['INVENTORY_DATABASE_URL']).execute('SELECT 1'); print('DATABASE_OK')"
     if ($LASTEXITCODE -ne 0) { throw 'فشل اختبار اتصال Python بقاعدة البيانات.' }
   } finally { Pop-Location }
-  Step 'اكتمل الإعداد؛ تشغيل التطبيق'
-  Start-Process -FilePath (Join-Path $AppDir '.venv\Scripts\pythonw.exe') -ArgumentList (Join-Path $AppDir 'main.py') -WorkingDirectory $AppDir
+  Step 'تحويل البرنامج إلى تطبيق EXE مناسب لمعمارية هذا الجهاز'
+  Push-Location $AppDir
+  try {
+    & .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --windowed --onedir --name InventoryManager --collect-all psycopg --collect-all dotenv main.py
+    if ($LASTEXITCODE -ne 0) { throw 'فشل إنشاء ملف EXE. راجع سجل البناء.' }
+    if (Test-Path (Join-Path $AppDir '.env')) { Copy-Item (Join-Path $AppDir '.env') (Join-Path $AppDir 'dist\InventoryManager\.env') -Force }
+    New-Item -ItemType Directory -Force -Path (Join-Path $AppDir 'dist\InventoryManager\data') | Out-Null
+  } finally { Pop-Location }
+  Step 'اكتمل الإعداد والبناء؛ تشغيل EXE'
+  Start-Process -FilePath (Join-Path $AppDir 'dist\InventoryManager\InventoryManager.exe') -WorkingDirectory (Join-Path $AppDir 'dist\InventoryManager')
 } catch {
   Write-Host "`nفشل الإعداد: $($_.Exception.Message)" -ForegroundColor Red
   Read-Host 'اضغط Enter للإغلاق'
