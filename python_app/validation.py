@@ -47,3 +47,20 @@ def validate_record(sheet: str, values: dict, *, require_fields: bool = True) ->
             raise ValueError(f"{label}: أدخل عدداً صحيحاً.") from None
         if not number.is_finite() or number < 0 or number != number.to_integral_value():
             raise ValueError(f"{label}: أدخل عدداً صحيحاً غير سالب.")
+
+
+def resolve_asset_reference(store, sheet: str, values: dict) -> None:
+    """Resolve custody/maintenance links from the selected asset serial."""
+    if sheet not in {"Custody", "Maintenance"}:
+        return
+    serial = str(values.get("asset_serial") or "").strip().casefold()
+    if not serial:
+        return
+    asset = next(
+        (row for row in store.list_rows("Assets")
+         if str(row.get("serial_number") or "").strip().casefold() == serial),
+        None,
+    )
+    if asset is None:
+        raise ValueError("الرقم التسلسلي المختار غير موجود في سجل الأصول.")
+    values["asset_id"] = asset.get("id")
