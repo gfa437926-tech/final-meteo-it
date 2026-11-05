@@ -25,6 +25,8 @@ class PostgresStore:
                 rows=conn.execute("SELECT timestamp::text AS timestamp,username,action,sheet,record_id,details FROM audit_logs ORDER BY log_id DESC LIMIT 5000").fetchall()
             else: rows=conn.execute(f'SELECT * FROM "{TABLES[sheet]}" ORDER BY id').fetchall()
         return [dict(r) for r in rows]
+    def _write_audit(self,conn,action,sheet,record_id,details):
+        conn.execute("INSERT INTO audit_logs(username,action,sheet,record_id,details) VALUES (%s,%s,%s,%s,%s)",("local-user",action,sheet,record_id,str(details)[:1000]))
     def add_row(self,sheet: str,values: dict[str,Any])->dict[str,Any]:
         if sheet not in TABLES or sheet=="AuditLog": raise ValueError("This worksheet is not editable")
         clean={k:values.get(k) for k in SCHEMA[sheet]}
@@ -37,15 +39,18 @@ class PostgresStore:
         if "updated_at" in SCHEMA[sheet]: clean["updated_at"]=now
         cols=list(clean); names=", ".join(f'"{c}"' for c in cols); marks=", ".join(["%s"]*len(cols))
         try:
-            with self._connect() as conn: conn.execute(f'INSERT INTO "{TABLES[sheet]}" ({names}) VALUES ({marks})',[clean[c] for c in cols])
+            with self._connect() as conn:
+                conn.execute(f'INSERT INTO "{TABLES[sheet]}" ({names}) VALUES ({marks})',[clean[c] for c in cols])
+                self._write_audit(conn,"إضافة",sheet,clean["id"],clean)
         except psycopg.errors.UniqueViolation as exc:
             if sheet=="Assets": raise ValueError("الرقم التسلسلي مسجل مسبقاً.") from exc
             raise ValueError("معرّف السجل مستخدم مسبقاً.") from exc
-        self.log("local-user","إضافة",sheet,clean["id"],str(clean)); return clean
+        return clean
     def update_row(self,sheet: str,record_id: str,values: dict[str,Any])->None:
         if sheet not in TABLES or sheet=="AuditLog": raise ValueError("This worksheet is not editable")
         updates={k:v for k,v in values.items() if k in SCHEMA[sheet] and k!="id"}
         if not updates: return
+        # Resolve references against current data before opening the write transaction.
         resolve_asset_reference(self,sheet,updates)
         validate_record(sheet,updates,require_fields=False)
         if sheet=="Assets" and "serial_number" in updates: updates["serial_number"]=str(updates["serial_number"] or "").strip().upper() or None
@@ -55,13 +60,14 @@ class PostgresStore:
             with self._connect() as conn:
                 result=conn.execute(f'UPDATE "{TABLES[sheet]}" SET {sets} WHERE id = %s',[*updates.values(),record_id])
                 if result.rowcount==0: raise ValueError("السجل المطلوب غير موجود.")
+                self._write_audit(conn,"تعديل",sheet,record_id,values)
         except psycopg.errors.UniqueViolation as exc: raise ValueError("الرقم التسلسلي مسجل لأصل آخر.") from exc
-        self.log("local-user","تعديل",sheet,record_id,str(values))
     def delete_row(self,sheet: str,record_id: str)->None:
         if sheet not in TABLES or sheet in ("AuditLog","Assets"): raise ValueError("حذف الأصول معطل لحماية سجل الجرد؛ غيّر الحالة إلى متقاعد.")
         with self._connect() as conn:
             result=conn.execute(f'DELETE FROM "{TABLES[sheet]}" WHERE id=%s',(record_id,))
             if result.rowcount==0: raise ValueError("السجل المطلوب غير موجود.")
-        self.log("local-user","حذف",sheet,record_id,"حذف سجل")
+            self._write_audit(conn,"حذف",sheet,record_id,"حذف سجل")
     def log(self,username: str,action: str,sheet: str,record_id: str,details: str)->None:
+        # Explicit standalone audit entries remain available for callers.
         with self._connect() as conn: conn.execute("INSERT INTO audit_logs(username,action,sheet,record_id,details) VALUES (%s,%s,%s,%s,%s)",(username,action,sheet,record_id,details[:1000]))
