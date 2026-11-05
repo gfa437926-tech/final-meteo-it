@@ -41,7 +41,7 @@ async function main() {
   if (confirmation !== projectId) {
     throw new Error('Project confirmation did not match. No data was written.');
   }
-  if (!/^[A-Za-z0-9_-]{20,128}$/.test(uid)) {
+  if (uid.length < 1 || uid.length > 128 || uid.includes('/') || /[\\u0000-\\u001f]/.test(uid)) {
     throw new Error('UID format is invalid. Copy the exact UID from Firebase Authentication.');
   }
   if (!displayName || displayName.length > 120) {
