@@ -4,7 +4,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 
-from excel_store import ExcelStore, SCHEMA
+from excel_store import SCHEMA
+from dotenv import load_dotenv
+from storage_factory import create_store
 
 LABELS = {
     "Assets": ("الأصول", {"category":"الفئة", "brand":"الشركة", "model":"الطراز", "serial_number":"الرقم التسلسلي", "status":"الحالة", "office":"المكتب", "employee":"المستلم", "cpu":"المعالج", "ram":"الذاكرة", "storage":"التخزين", "received_at":"تاريخ الاستلام", "notes":"ملاحظات"}),
@@ -22,7 +24,8 @@ class InventoryApp(tk.Tk):
         self.title("نظام جرد وإدارة أصول تقنية المعلومات — Python")
         self.geometry("1280x780")
         self.minsize(980, 620)
-        self.store = ExcelStore()
+        load_dotenv()
+        self.store = create_store()
         self.configure(bg="#eef2f6")
         self._build()
 
@@ -30,7 +33,7 @@ class InventoryApp(tk.Tk):
         header = tk.Frame(self, bg="#173b5e", height=76)
         header.pack(fill="x")
         tk.Label(header, text="نظام جرد وإدارة أصول تقنية المعلومات", bg="#173b5e", fg="white", font=("Arial", 20, "bold"), anchor="e").pack(fill="x", padx=24, pady=(12, 0))
-        tk.Label(header, text="نسخة Python مستقلة — التخزين المحلي عبر Excel — دون Firebase", bg="#173b5e", fg="#d7e7f5", font=("Arial", 10), anchor="e").pack(fill="x", padx=26, pady=(2, 10))
+        tk.Label(header, text="نسخة Python مستقلة — PostgreSQL محلي أو Excel — دون Firebase أو Docker", bg="#173b5e", fg="#d7e7f5", font=("Arial", 10), anchor="e").pack(fill="x", padx=26, pady=(2, 10))
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True, padx=14, pady=14)
         for sheet, (title, fields) in LABELS.items():
@@ -107,7 +110,7 @@ class InventoryApp(tk.Tk):
                 self.store.add_row(sheet, {k: e.get().strip() for k, e in entries.items()})
                 win.destroy()
                 self._reload_current()
-                messagebox.showinfo("تم", "تم حفظ السجل في ملف Excel.")
+                messagebox.showinfo("تم", "تم حفظ السجل في قاعدة البيانات المحلية.")
             except Exception as exc:
                 messagebox.showerror("تعذر الحفظ", str(exc))
         ttk.Button(win, text="حفظ", command=save).pack(pady=12)
