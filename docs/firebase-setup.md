@@ -129,3 +129,22 @@ The Pages workflow reads these repository Actions **Variables** and passes them 
 Create a Firebase **Web app** inside the dedicated IT inventory Firebase project, then copy the corresponding values from its Firebase SDK configuration into the repository's Settings → Secrets and variables → Actions → Variables. These web configuration values identify the Firebase app; they are not Admin SDK credentials. Never put service-account JSON, private keys, or Admin SDK credentials in Actions Variables, Dart defines, or the Flutter client.
 
 Until all six values are configured, the Pages site deliberately displays a clear Firebase setup screen instead of attempting an anonymous or guessed connection. Native Android/Windows builds must use their own FlutterFire-generated platform options. This setup does not create a Firebase project, enable billing/services, provision users, or deploy security rules.
+
+
+## Repeatable trusted user provisioning (CLI)
+
+The repository now includes `scripts/provision-user.mjs` for creating a Firestore profile for an Authentication account that already exists. It uses Google Cloud Application Default Credentials (ADC), calls the Firestore REST API, and deliberately does not create passwords or Authentication users.
+
+1. Install and authenticate Google Cloud CLI in a trusted administrator workstation:
+   `gcloud auth application-default login`
+2. Create the staff account in Firebase Authentication using the approved identity process and copy its UID.
+3. Run the script from the repository root, supplying the exact dedicated inventory Firebase project ID:
+
+```bash
+node scripts/provision-user.mjs --project YOUR_DEDICATED_PROJECT_ID --confirm-project YOUR_DEDICATED_PROJECT_ID --uid FIREBASE_AUTH_UID --name "Staff Display Name" --email "staff@example.com" --role it_manager
+```
+
+4. Type `CREATE PROFILE` when prompted. The script validates every argument and requires both project-ID confirmation and the explicit phrase.
+5. Verify the resulting `users/{uid}` document and sign-in with the account.
+
+The operation is create-only: Firestore's `currentDocument.exists=false` precondition prevents overwriting an existing profile. If the UID already has a profile, the script stops and leaves it unchanged. The ADC identity must have narrowly scoped permission to create documents in the dedicated project's Firestore database. Do not grant broad project-owner access just to run this script, and never copy ADC files or tokens into the repository or Flutter application. The script does not modify Firestore rules, create Authentication accounts, or touch any other Firebase project.
