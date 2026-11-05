@@ -21,14 +21,19 @@ class ExcelStoreTests(unittest.TestCase):
         self.assertEqual(self.store.list_rows("Assets")[0]["category"], "حاسوب")
 
     def test_duplicate_serial_is_rejected(self):
-        self.store.add_row("Assets", {"serial_number": "SN-1"})
+        self.store.add_row("Assets", {"category": "حاسوب", "serial_number": "SN-1"})
         with self.assertRaises(ValueError):
-            self.store.add_row("Assets", {"serial_number": " sn-1 "})
+            self.store.add_row("Assets", {"category": "حاسوب", "serial_number": " sn-1 "})
 
     def test_asset_delete_is_disabled(self):
-        row = self.store.add_row("Assets", {"serial_number": "SN-2"})
+        row = self.store.add_row("Assets", {"category": "حاسوب", "serial_number": "SN-2"})
         with self.assertRaises(ValueError):
             self.store.delete_row("Assets", row["id"])
+
+
+    def test_required_asset_category_is_enforced(self):
+        with self.assertRaisesRegex(ValueError, "فئة الأصل"):
+            self.store.add_row("Assets", {"serial_number": "SN-3"})
 
 if __name__ == "__main__":
     unittest.main()
