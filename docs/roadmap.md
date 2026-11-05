@@ -22,7 +22,7 @@
 - [ ] Configure dedicated Firebase project, FlutterFire platform files, and deploy Firestore/Storage rules
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
-- [ ] Implement trusted user provisioning and office-scoped permissions
+- [x] Add a guarded, create-only trusted user-profile provisioning CLI using Google Cloud ADC and Firestore REST (account creation remains an external identity-admin step)\n- [ ] Implement office-scoped permissions
 - [x] Add asset editing and safe retirement with movement history
 - [x] Add camera barcode/QR scanning and locate assets by scanned serial or asset ID
 - [x] Generate and display QR labels containing stable asset IDs
