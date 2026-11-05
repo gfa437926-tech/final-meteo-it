@@ -4,6 +4,13 @@
 
 > المستودع المستهدف: `gfa437926-tech/final-meteo-it` — الفرع `main`. هذا المشروع مستقل عن مشاريع METRA الخاصة بالأرصاد وقواعد بياناتها.
 
+## معاينة الويب عبر GitHub Pages
+
+- رابط الموقع: https://gfa437926-tech.github.io/final-meteo-it/
+- يتم بناء نسخة Flutter Web ونشرها تلقائياً عند تحديث الفرع `main`، أو يدوياً من تبويب **Actions** بتشغيل سير العمل **Deploy Flutter Web to GitHub Pages**.
+- النشر الناجح يعني أن ملفات الويب وصلت إلى GitHub Pages؛ ولا يعني أن Firebase قد تم إعداده. قبل تفعيل تسجيل الدخول والبيانات، يجب إنشاء مشروع Firebase مخصص لهذا التطبيق، وتوليد `lib/firebase_options.dart` محلياً باستخدام FlutterFire CLI، ثم مراجعة إعدادات المنصات والقواعد. لا تضع مفاتيح الخدمة أو أسرار Admin SDK في المستودع أو تطبيق Flutter.
+- لا تستخدم الموقع العام لإدخال بيانات حقيقية أو حساسة قبل إكمال إعداد Firebase ومراجعة صلاحيات الوصول.
+
 ## الوظائف الموجودة حالياً
 
 ### إدارة الأصول والمواقع
@@ -77,6 +84,6 @@ flutterfire configure
 
 ## بوابة الجاهزية
 
-آخر تحقق CI موثق على الفرع `main` هو التشغيل [#240](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41936741188)، وقد نجح فيه كل من Flutter analyze وFlutter tests واختبارات Firestore/Storage Emulator. نجاح CI يثبت اجتياز الفحوص الآلية فقط، ولا يعني أن Firebase الإنتاجي مضبوط أو أن التطبيق جاهز للنشر.
+آخر تحقق CI موثق على الفرع `main` هو التشغيل [#251](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41947912340)، وقد نجح فيه Flutter analyze وFlutter tests واختبارات Firestore/Storage Emulator. كما نجح سير نشر GitHub Pages في البناء والنشر [#1](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41947912379). نجاح CI والنشر يثبت اجتياز الفحوص الآلية ووصول ملفات الويب فقط، ولا يعني أن Firebase الإنتاجي مضبوط أو أن التطبيق جاهز للتشغيل الفعلي.
 
 **لا تستخدم بيانات تشغيلية حقيقية قبل إكمال إعداد Firebase المخصص، ومراجعة الصلاحيات، وتجارب الاستعادة، وبناء واختبار التطبيقات على الأجهزة المستهدفة.**
