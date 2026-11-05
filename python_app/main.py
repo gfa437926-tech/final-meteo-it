@@ -12,6 +12,7 @@ from storage_factory import create_store
 from export_tools import export_workbook
 from import_tools import import_workbook
 from backup_tools import create_backup, suggested_backup_name
+from validation import validate_record
 
 def filter_rows(rows, query: str):
     """Return rows containing the case-insensitive query in any field."""
@@ -227,16 +228,7 @@ class InventoryApp(tk.Tk):
 
     def _collect_form(self, sheet, entries):
         values = {key: widget.get().strip() for key, widget in entries.items()}
-        required = {
-            "Offices": ["name"],
-            "Custody": ["asset_serial", "employee"],
-            "Maintenance": ["problem"],
-            "Purchases": ["purchase_number"],
-            "SpareParts": ["name"],
-        }.get(sheet, [])
-        missing = [LABELS[sheet][1].get(key, key) for key in required if not values.get(key)]
-        if missing:
-            raise ValueError("يرجى تعبئة الحقول الإلزامية: " + "، ".join(missing))
+        validate_record(sheet, values)
         return values
 
     def _add(self, sheet, fields):
