@@ -1,27 +1,37 @@
 # نسخة Python لإدارة وجرد أصول تقنية المعلومات
 
-تطبيق Windows مستقل عن Flutter. لا يستخدم Firebase أو Docker. يدعم Excel أو PostgreSQL محلياً.
+تطبيق Windows مستقل عن Flutter. لا يستخدم Firebase أو Docker. التخزين الافتراضي PostgreSQL محلي، مع خيار Excel.
 
-## التثبيت الآلي
+## التثبيت والتحويل إلى EXE تلقائياً
 
-1. نزّل المستودع كاملاً من GitHub باستخدام **Code → Download ZIP** ثم فك الضغط.
+1. نزّل المستودع كاملاً من GitHub عبر **Code → Download ZIP** ثم فك الضغط.
 2. انقر نقراً مزدوجاً على `python_app/install_and_setup.bat`.
 3. وافق على صلاحيات مسؤول Windows.
-4. إذا كان PostgreSQL مثبتاً مسبقاً، أدخل كلمة مرور المستخدم `postgres` الحالية عند الطلب.
+4. إذا كان PostgreSQL مثبتاً مسبقاً، أدخل كلمة مرور مستخدم `postgres` الحالية.
 
-يحاول المثبّت تثبيت PostgreSQL 17 وPython 3.12 تلقائياً عبر winget عند عدم وجودهما، ثم ينشئ قاعدة `meteo_inventory` ومستخدم التطبيق `inventory_app`، ويطبق الجداول، وينشئ بيئة Python، ويثبت المكتبات، ويختبر الاتصال، ثم يشغل البرنامج. يلزم Windows 10/11، اتصال إنترنت أثناء التثبيت، وwinget (App Installer). قد تتطلب بعض الأجهزة إعادة تشغيل بعد تثبيت Python.
+المثبّت يثبت PostgreSQL 17 وPython 3.12 عند الحاجة، ينشئ قاعدة `meteo_inventory` ومستخدم التطبيق، يطبق مخطط الجداول، ينشئ بيئة Python ويثبت المتطلبات، ثم يبني التطبيق إلى **EXE على الجهاز نفسه** باستخدام PyInstaller ويشغله.
 
-**مهم:** هذه قاعدة PostgreSQL محلية وليست حزمة Supabase الكاملة؛ لا Docker ولا Firebase ولا مشروع سحابي. لا يتصل المثبّت بأي قواعد قديمة، ولا يستورد بيانات Excel تلقائياً.
+**ملف التشغيل الناتج:**
+`python_app\dist\InventoryManager\InventoryManager.exe`
 
-## التشغيل بعد التثبيت
+يُبنى التطبيق على الجهاز المستهدف نفسه، لذلك يطابق معمارية Windows/Python المثبتة عليه. نستخدم وضع مجلد مستقل (onedir) بدلاً من ملف واحد ضخـم لتحسين توافق مكتبات PostgreSQL وتقليل مشكلات التشغيل. انقل مجلد `InventoryManager` كاملاً، لا تنقل EXE منفرداً.
 
-انقر `run_windows.bat`. إعداد الاتصال محفوظ محلياً في `.env` ولا ترفعه إلى GitHub.
+## إعادة بناء EXE لاحقاً
 
-## التخزين
+انقر `python_app\build_exe.bat`. ينتج التطبيق داخل `dist\InventoryManager`. لا يلزم تثبيت Python لتشغيل EXE بعد بنائه، لكن يلزم وجود خدمة PostgreSQL المحلية كي يعمل مخزن PostgreSQL.
+
+## التشغيل اليومي
+
+شغّل `dist\InventoryManager\InventoryManager.exe`. يمكن أيضاً استخدام `run_windows.bat` لتشغيل نسخة Python أثناء التطوير.
+
+## التخزين وقاعدة البيانات
 
 - PostgreSQL: `INVENTORY_STORAGE=postgres`.
 - Excel: `INVENTORY_STORAGE=excel`.
-- ملفات Excel القديمة تبقى دون تعديل عند التبديل.
+- إعداد الاتصال المحلي موجود في `.env` بجانب EXE الناتج.
+- لا يستورد المثبّت بيانات Excel تلقائياً ولا يعدّل أي قاعدة قديمة.
+
+هذه قاعدة PostgreSQL محلية وليست حزمة Supabase الكاملة؛ لا Docker ولا Firebase ولا مشروع سحابي.
 
 ## الجداول
 
@@ -34,10 +44,11 @@ py -3 -m pip install -r requirements.txt
 py -3 -m unittest discover -v
 ```
 
-اختبارات الاتصال الفعلية تحتاج PostgreSQL محلياً. استخدم قاعدة اختبار منفصلة قبل أي بيانات حقيقية.
+اختبارات الاتصال الفعلية تتطلب PostgreSQL محلياً.
 
 ## الأمان
 
-- كلمة مرور مستخدم التطبيق تُولّد عشوائياً وتُحفظ في `.env` المحلي.
-- لا تفتح منفذ PostgreSQL للشبكة؛ الاتصال مضبوط على localhost.
+- كلمة مرور مستخدم التطبيق تُولّد عشوائياً وتُحفظ محلياً في `.env`.
+- لا تفتح منفذ PostgreSQL للشبكة؛ الاتصال الافتراضي localhost.
 - احتفظ بنسخ احتياطية دورية باستخدام `pg_dump`.
+- احفظ مجلد EXE وملفاته المرافقة كاملاً؛ لا تشارك ملف `.env` أو ترفعه إلى GitHub.
