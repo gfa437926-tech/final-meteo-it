@@ -9,6 +9,20 @@ function Password($n) {
   try { $rng.GetBytes($bytes); return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant() }
   finally { $rng.Dispose() }
 }
+function Protect-SecretFile($Path) {
+  if (-not (Test-Path $Path)) { return }
+  $acl = Get-Acl $Path
+  $acl.SetAccessRuleProtection($true, $false)
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
+  $adminsSid = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')
+  $allow = [Security.AccessControl.AccessControlType]::Allow
+  $full = [Security.AccessControl.FileSystemRights]::FullControl
+  $acl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($currentSid, $full, $allow))
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($systemSid, $full, $allow))
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($adminsSid, $full, $allow))
+  Set-Acl -Path $Path -AclObject $acl
+}
 function PsqlPath {
   $cmd = Get-Command psql.exe -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
@@ -83,6 +97,7 @@ try {
 INVENTORY_STORAGE=postgres
 INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/meteo_inventory
 "@ | Set-Content -Path (Join-Path $AppDir '.env') -Encoding ASCII
+  Protect-SecretFile (Join-Path $AppDir '.env')
   if (-not (Get-Command py.exe -ErrorAction SilentlyContinue)) {
     Step 'تنزيل وتثبيت Python 3.12'
     & winget install --id Python.Python.3.12 --exact --silent --accept-package-agreements --accept-source-agreements
@@ -108,6 +123,7 @@ INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/me
     & .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --windowed --onedir --name InventoryManager --collect-all psycopg --collect-all dotenv main.py
     if ($LASTEXITCODE -ne 0) { throw 'فشل إنشاء ملف EXE. راجع سجل البناء.' }
     if (Test-Path (Join-Path $AppDir '.env')) { Copy-Item (Join-Path $AppDir '.env') (Join-Path $AppDir 'dist\InventoryManager\.env') -Force }
+    Protect-SecretFile (Join-Path $AppDir 'dist\InventoryManager\.env')
     New-Item -ItemType Directory -Force -Path (Join-Path $AppDir 'dist\InventoryManager\data') | Out-Null
   } finally { Pop-Location }
   Step 'إنشاء اختصار على سطح المكتب'
