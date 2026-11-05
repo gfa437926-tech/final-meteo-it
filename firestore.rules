@@ -26,15 +26,22 @@ service cloud.firestore {
       return isAdmin() && (
         (
           approvalBefore == 'pending' &&
+          resource.data.status == 'active' &&
           request.resource.data.approvalStatus == 'approved' &&
           request.resource.data.approvedBy == request.auth.uid &&
-          changed.hasOnly(['approvalStatus', 'approvedBy', 'approvedAt'])
+          request.resource.data.approvedAt is timestamp &&
+          changed.hasOnly(['approvalStatus', 'approvedBy', 'approvedAt']) &&
+          assetAfter.status == 'assigned'
         ) ||
         (
           approvalBefore == 'pending' &&
+          resource.data.status == 'active' &&
           request.resource.data.approvalStatus == 'rejected' &&
           request.resource.data.status == 'rejected' &&
           request.resource.data.rejectedBy == request.auth.uid &&
+          request.resource.data.rejectedAt is string &&
+          request.resource.data.rejectedAt.size() > 0 &&
+          request.resource.data.rejectionReason is string &&
           changed.hasOnly(['approvalStatus', 'status', 'rejectedBy', 'rejectedAt', 'rejectionReason']) &&
           assetAfter.status == 'available'
         ) ||
@@ -42,6 +49,8 @@ service cloud.firestore {
           approvalBefore == 'approved' &&
           resource.data.status == 'active' &&
           request.resource.data.status == 'returned' &&
+          request.resource.data.returnedAt is string &&
+          request.resource.data.returnedAt.size() > 0 &&
           changed.hasOnly(['status', 'returnedAt']) &&
           assetAfter.status == 'available'
         ) ||
@@ -49,6 +58,12 @@ service cloud.firestore {
           approvalBefore == 'approved' &&
           resource.data.status == 'active' &&
           request.resource.data.status == 'active' &&
+          request.resource.data.employeeName is string &&
+          request.resource.data.employeeName.size() > 0 &&
+          request.resource.data.officeName is string &&
+          request.resource.data.officeName.size() > 0 &&
+          request.resource.data.transferredAt is string &&
+          request.resource.data.transferredAt.size() > 0 &&
           changed.hasOnly(['employeeName', 'officeName', 'transferredAt']) &&
           assetAfter.officeName == request.resource.data.officeName
         )
