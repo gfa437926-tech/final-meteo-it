@@ -105,8 +105,18 @@ INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/me
     if (Test-Path (Join-Path $AppDir '.env')) { Copy-Item (Join-Path $AppDir '.env') (Join-Path $AppDir 'dist\InventoryManager\.env') -Force }
     New-Item -ItemType Directory -Force -Path (Join-Path $AppDir 'dist\InventoryManager\data') | Out-Null
   } finally { Pop-Location }
+  Step 'إنشاء اختصار على سطح المكتب'
+  $exePath = Join-Path $AppDir 'dist\InventoryManager\InventoryManager.exe'
+  $desktop = [Environment]::GetFolderPath('Desktop')
+  $shortcutPath = Join-Path $desktop 'نظام جرد الأصول.lnk'
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($shortcutPath)
+  $shortcut.TargetPath = $exePath
+  $shortcut.WorkingDirectory = Split-Path -Parent $exePath
+  $shortcut.Description = 'نظام جرد وإدارة أصول تقنية المعلومات'
+  $shortcut.Save()
   Step 'اكتمل الإعداد والبناء؛ تشغيل EXE'
-  Start-Process -FilePath (Join-Path $AppDir 'dist\InventoryManager\InventoryManager.exe') -WorkingDirectory (Join-Path $AppDir 'dist\InventoryManager')
+  Start-Process -FilePath $exePath -WorkingDirectory (Split-Path -Parent $exePath)
 } catch {
   Write-Host "`nفشل الإعداد: $($_.Exception.Message)" -ForegroundColor Red
   Read-Host 'اضغط Enter للإغلاق'
