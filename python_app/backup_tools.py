@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 def create_backup(store, destination: str | Path) -> Path:
@@ -32,10 +33,17 @@ def create_backup(store, destination: str | Path) -> Path:
     executable = next((item for item in candidates if item and (Path(item).exists() if os.path.isabs(item) else True)), None)
     if not executable:
         raise FileNotFoundError("لم يتم العثور على pg_dump. تأكد من تثبيت أدوات PostgreSQL.")
+    parsed = urlsplit(dsn)
+    if not parsed.hostname or not parsed.path.lstrip("/"):
+        raise ValueError("عنوان اتصال PostgreSQL غير صالح.")
     env = os.environ.copy()
-    env["PGPASSWORD"] = dsn.split(":", 1)[1].split("@", 1)[0] if "://" in dsn and "@" in dsn else ""
+    env["PGPASSWORD"] = unquote(parsed.password or "")
+    env["PGHOST"] = parsed.hostname
+    env["PGPORT"] = str(parsed.port or 5432)
+    env["PGUSER"] = unquote(parsed.username or "")
+    env["PGDATABASE"] = unquote(parsed.path.lstrip("/"))
     completed = subprocess.run(
-        [executable, "--format=custom", "--no-owner", "--no-acl", "--file", str(target), "--dbname", dsn],
+        [executable, "--format=custom", "--no-owner", "--no-acl", "--no-password", "--file", str(target)],
         env=env,
         capture_output=True,
         text=True,
