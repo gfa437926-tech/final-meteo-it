@@ -25,7 +25,7 @@ def filter_rows(rows, query: str):
 LABELS = {
     "Assets": ("الأصول", {"category":"الفئة", "brand":"الشركة", "model":"الطراز", "serial_number":"الرقم التسلسلي", "status":"الحالة", "office":"المكتب", "employee":"المستلم", "cpu":"المعالج", "ram":"الذاكرة", "storage":"التخزين", "received_at":"تاريخ الاستلام", "notes":"ملاحظات"}),
     "Offices": ("المكاتب", {"name":"اسم المكتب", "directorate":"المديرية", "department":"القسم", "location":"الموقع", "notes":"ملاحظات"}),
-    "Custody": ("العهد", {"asset_id":"معرّف الأصل", "asset_serial":"الرقم التسلسلي", "employee":"الموظف", "office":"المكتب", "issued_at":"تاريخ التسليم", "returned_at":"تاريخ الإرجاع", "status":"الحالة", "notes":"ملاحظات"}),
+    "Custody": ("العهد", {"asset_serial":"الرقم التسلسلي", "employee":"الموظف", "office":"المكتب", "issued_at":"تاريخ التسليم", "returned_at":"تاريخ الإرجاع", "status":"الحالة", "notes":"ملاحظات"}),
     "Maintenance": ("الصيانة", {"asset_id":"معرّف الأصل", "asset_serial":"الرقم التسلسلي", "problem":"العطل", "action_taken":"الإجراء", "technician":"الفني", "opened_at":"تاريخ الفتح", "closed_at":"تاريخ الإغلاق", "cost":"الكلفة", "status":"الحالة", "notes":"ملاحظات"}),
     "Purchases": ("المشتريات", {"purchase_number":"رقم الشراء", "supplier":"المورد", "invoice_number":"رقم الفاتورة", "purchase_date":"تاريخ الشراء", "total_cost":"الإجمالي", "warranty_until":"انتهاء الضمان", "notes":"ملاحظات"}),
     "SpareParts": ("قطع الغيار", {"name":"اسم القطعة", "part_number":"رقم القطعة", "quantity":"الكمية", "unit_cost":"سعر الوحدة", "location":"الموقع", "notes":"ملاحظات"}),
@@ -210,7 +210,16 @@ class InventoryApp(tk.Tk):
         entries = {}
         for key, label in fields.items():
             ttk.Label(body, text=label, anchor="e").pack(fill="x", pady=(7, 2))
-            if key == "status":
+            if key == "asset_serial" and sheet in ("Custody", "Maintenance"):
+                serials = sorted({
+                    str(row.get("serial_number")).strip()
+                    for row in self.store.list_rows("Assets")
+                    if row.get("serial_number")
+                })
+                entry = ttk.Combobox(body, values=serials, state="readonly", justify="right", width=52)
+                if initial.get(key):
+                    entry.set(str(initial.get(key)))
+            elif key == "status":
                 choices = {
                     "Assets": ["متاح", "بعهدة موظف", "قيد الصيانة", "متقاعد", "مفقود"],
                     "Custody": ["مسلّمة", "مُعادة", "قيد الإرجاع"],
