@@ -10,6 +10,14 @@ from excel_store import SCHEMA
 from dotenv import load_dotenv
 from storage_factory import create_store
 
+def filter_rows(rows, query: str):
+    """Return rows containing the case-insensitive query in any field."""
+    needle = (query or "").strip().casefold()
+    if not needle:
+        return rows
+    return [row for row in rows if needle in " ".join(str(v or "") for v in row.values()).casefold()]
+
+
 LABELS = {
     "Assets": ("الأصول", {"category":"الفئة", "brand":"الشركة", "model":"الطراز", "serial_number":"الرقم التسلسلي", "status":"الحالة", "office":"المكتب", "employee":"المستلم", "cpu":"المعالج", "ram":"الذاكرة", "storage":"التخزين", "received_at":"تاريخ الاستلام", "notes":"ملاحظات"}),
     "Offices": ("المكاتب", {"name":"اسم المكتب", "directorate":"المديرية", "department":"القسم", "location":"الموقع", "notes":"ملاحظات"}),
@@ -29,6 +37,7 @@ class InventoryApp(tk.Tk):
         app_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
         load_dotenv(app_dir / '.env')
         self.store = create_store()
+        self.search_vars = {}
         self.configure(bg="#eef2f6")
         self._build()
 
@@ -43,7 +52,8 @@ class InventoryApp(tk.Tk):
             frame = ttk.Frame(self.tabs)
             self.tabs.add(frame, text=title)
             self._build_table(frame, sheet, fields)
-        footer = tk.Label(self, text=f"ملف البيانات: {self.store.path}", bg="#eef2f6", fg="#526273", anchor="w")
+        storage_info = getattr(self.store, "path", "PostgreSQL — localhost / meteo_inventory")
+        footer = tk.Label(self, text=f"مصدر البيانات المحلي: {storage_info}", bg="#eef2f6", fg="#526273", anchor="w")
         footer.pack(fill="x", padx=18, pady=(0, 8))
 
     def _build_table(self, parent, sheet, fields):
@@ -56,6 +66,11 @@ class InventoryApp(tk.Tk):
                 ttk.Button(bar, text="حذف المحدد", command=lambda: self._delete(sheet, tree)).pack(side="right", padx=4)
         ttk.Button(bar, text="تحديث", command=lambda: self._refresh(sheet, tree, fields)).pack(side="left", padx=4)
         cols = list(fields.keys())
+        search_var = tk.StringVar()
+        self.search_vars[sheet] = search_var
+        search_box = ttk.Entry(bar, textvariable=search_var, justify="right", width=30)
+        search_box.pack(side="right", padx=(16, 4))
+        ttk.Label(bar, text="بحث في السجلات:").pack(side="right")
         tree = ttk.Treeview(parent, columns=cols, show="headings", height=22)
         for key in cols:
             tree.heading(key, text=fields[key], anchor="e")
@@ -66,14 +81,17 @@ class InventoryApp(tk.Tk):
         tree.pack(fill="both", expand=True, side="top")
         xscroll.pack(fill="x")
         yscroll.place(relx=0.985, rely=0.13, relheight=0.78)
+        search_var.trace_add("write", lambda *_: self._refresh(sheet, tree, fields))
         self._refresh(sheet, tree, fields)
 
     def _refresh(self, sheet, tree, fields):
         for item in tree.get_children():
             tree.delete(item)
-        for row in self.store.list_rows(sheet):
+        rows = filter_rows(self.store.list_rows(sheet), self.search_vars[sheet].get())
+        for index, row in enumerate(rows):
             values = [row.get(key) if row.get(key) is not None else "" for key in fields]
-            tree.insert("", "end", iid=str(row.get("id") or row.get("timestamp")), values=values)
+            row_id = row.get("id") or row.get("timestamp") or f"row-{index}"
+            tree.insert("", "end", iid=str(row_id), values=values)
 
     def _selected_id(self, tree):
         selected = tree.selection()
