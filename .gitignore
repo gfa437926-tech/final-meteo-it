@@ -20,3 +20,6 @@ __pycache__/
 .venv/
 venv/
 python_app/data/
+
+# Local Python database credentials
+python_app/.env
