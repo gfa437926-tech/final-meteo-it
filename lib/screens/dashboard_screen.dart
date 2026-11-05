@@ -58,6 +58,9 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
+      drawer: wide ? null : const Drawer(
+        child: SafeArea(child: _SideNavigation()),
+      ),
       body: Row(
         children: [
           if (wide) const _SideNavigation(),
@@ -251,6 +254,7 @@ class _SideNavigation extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Padding(padding: EdgeInsets.all(12), child: Text('إدارة الأصول', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold))),
+      Expanded(child: ListView(padding: EdgeInsets.zero, children: [
       _NavItem(icon: Icons.dashboard_outlined, label: 'لوحة التحكم', selected: true),
       _NavItem(icon: Icons.business_outlined, label: 'المكاتب', destination: const OfficesScreen()),
       _NavItem(icon: Icons.devices_outlined, label: 'الأجهزة والجرد', destination: const AssetsScreen()),
@@ -279,8 +283,8 @@ class _SideNavigation extends StatelessWidget {
           );
         },
       ),
-      const Spacer(),
       _NavItem(icon: Icons.settings_outlined, label: 'الإعدادات'),
+      ])),
     ]),
   );
 }
