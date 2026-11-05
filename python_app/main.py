@@ -147,7 +147,7 @@ class InventoryApp(tk.Tk):
             return None
         return selected[0]
 
-    def _form(self, title, fields, initial=None):
+    def _form(self, title, fields, initial=None, sheet=None):
         initial = initial or {}
         win = tk.Toplevel(self)
         win.title(title)
@@ -165,17 +165,41 @@ class InventoryApp(tk.Tk):
         entries = {}
         for key, label in fields.items():
             ttk.Label(body, text=label, anchor="e").pack(fill="x", pady=(7, 2))
-            entry = ttk.Entry(body, justify="right", width=55)
-            entry.insert(0, str(initial.get(key) or ""))
+            if key == "status":
+                choices = {
+                    "Assets": ["متاح", "بعهدة موظف", "قيد الصيانة", "متقاعد", "مفقود"],
+                    "Custody": ["مسلّمة", "مُعادة", "قيد الإرجاع"],
+                    "Maintenance": ["مفتوحة", "قيد التنفيذ", "مغلقة"],
+                }.get(sheet, ["نشط", "غير نشط", "مكتمل", "قيد التنفيذ"])
+                entry = ttk.Combobox(body, values=choices, state="readonly", justify="right", width=52)
+                if initial.get(key):
+                    entry.set(str(initial.get(key)))
+            else:
+                entry = ttk.Entry(body, justify="right", width=55)
+                entry.insert(0, str(initial.get(key) or ""))
             entry.pack(fill="x")
             entries[key] = entry
         return win, entries
 
+    def _collect_form(self, sheet, entries):
+        values = {key: widget.get().strip() for key, widget in entries.items()}
+        required = {
+            "Offices": ["name"],
+            "Custody": ["asset_serial", "employee"],
+            "Maintenance": ["problem"],
+            "Purchases": ["purchase_number"],
+            "SpareParts": ["name"],
+        }.get(sheet, [])
+        missing = [LABELS[sheet][1].get(key, key) for key in required if not values.get(key)]
+        if missing:
+            raise ValueError("يرجى تعبئة الحقول الإلزامية: " + "، ".join(missing))
+        return values
+
     def _add(self, sheet, fields):
-        win, entries = self._form("إضافة — " + LABELS[sheet][0], fields)
+        win, entries = self._form("إضافة — " + LABELS[sheet][0], fields, sheet=sheet)
         def save():
             try:
-                self.store.add_row(sheet, {k: e.get().strip() for k, e in entries.items()})
+                self.store.add_row(sheet, self._collect_form(sheet, entries))
                 win.destroy()
                 self._reload_current()
                 messagebox.showinfo("تم", "تم حفظ السجل في قاعدة البيانات المحلية.")
@@ -188,7 +212,7 @@ class InventoryApp(tk.Tk):
         if rid is None: return
         row = next((r for r in self.store.list_rows(sheet) if str(r.get("id")) == rid), None)
         if row is None: return
-        win, entries = self._form("تعديل — " + LABELS[sheet][0], fields, row)
+        win, entries = self._form("تعديل — " + LABELS[sheet][0], fields, row, sheet=sheet)
         def save():
             try:
                 self.store.update_row(sheet, rid, {k: e.get().strip() for k, e in entries.items()})
