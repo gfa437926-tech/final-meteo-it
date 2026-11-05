@@ -6,7 +6,7 @@
 - Every authenticated user must have a matching `users/{uid}` Firestore profile with `isActive: true` before accessing inventory data.
 - The application currently admits only `admin` and `it_manager` roles.
 - A super administrator (`admin`) can create and update profile documents for other Firebase Authentication accounts.
-- The application does not create Authentication accounts or passwords. Create accounts through a trusted Firebase Admin SDK process or the Firebase Console, then register their UID in the application.
+- The application does not create Authentication accounts or passwords. Create accounts through the approved identity-admin process, then register their UID in the application or use the guarded create-only CLI in `scripts/provision-user.mjs`.
 - Active users may update only their own `displayName`, `email`, and `updatedAt` profile fields; inactive accounts cannot use self-service profile updates, and users cannot change their own role or active state.
 - User deletion is disabled from the client.
 
@@ -47,7 +47,7 @@ This remains a development and controlled pre-pilot baseline, not a production-r
 
 1. **Firebase project and web app:** create/select a dedicated Firebase project for this IT inventory app, register its Web app, and set the six documented GitHub Actions repository Variables. The Pages workflow currently builds and deploys a deliberate setup screen when these values are absent; a successful Pages deployment does not prove Firebase connectivity.
 2. **Rules deployment:** review the selected Firebase project ID, run the emulator suite, then deploy Firestore and Storage rules only to the dedicated inventory project. No production rules have been deployed by this repository workflow.
-3. **Authorization:** office-scoped roles, office-level data isolation, and trusted server-side account provisioning remain unimplemented. Current rules allow active admin/IT-manager accounts broad inventory access.
+3. **Authorization:** office-scoped roles and office-level data isolation remain unimplemented. A trusted create-only profile provisioning CLI is available; Authentication account creation remains a separate identity-admin operation. Current rules allow active admin/IT-manager accounts broad inventory access.
 4. **App Check and privileged sign-in:** configure and verify App Check per supported platform, enforce MFA for privileged accounts where supported, and test all production clients before enforcement.
 5. **Data operations:** complete the serial reservation backfill, configure scheduled backups, and perform a documented restore drill before bulk import.
 6. **Operational validation:** configure monitoring/alerts and verify Android, Windows, and Web builds on real target devices.
