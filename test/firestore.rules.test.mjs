@@ -208,6 +208,34 @@ test('import batch audit records validate counts, types, actor and remain append
   await assertFails(setDoc(doc(db, 'import_batches', 'extra-field'), {
     ...validBatch, password: 'must-not-be-stored',
   }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'negative-count'), {
+    ...validBatch, failedRows: -1,
+  }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'status-mismatch'), {
+    ...validBatch, status: 'partial',
+  }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'error-count-mismatch'), {
+    ...validBatch, failedRows: 1, succeededRows: 3, status: 'partial',
+  }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'too-many-rows'), {
+    ...validBatch, totalRows: 101, attemptedRows: 101, succeededRows: 101,
+  }));
+  await assertSucceeds(setDoc(doc(db, 'import_batches', 'partial-batch'), {
+    ...validBatch,
+    succeededRows: 3,
+    failedRows: 1,
+    status: 'partial',
+    rowErrors: ['السطر 3: تعذر الحفظ'],
+  }));
+  await assertSucceeds(setDoc(doc(db, 'import_batches', 'failed-batch'), {
+    ...validBatch,
+    totalRows: 2,
+    attemptedRows: 2,
+    succeededRows: 0,
+    failedRows: 2,
+    status: 'failed',
+    rowErrors: ['فشل 1', 'فشل 2'],
+  }));
   await assertFails(updateDoc(doc(db, 'import_batches', 'batch-1'), {
     succeededRows: 500,
   }));
