@@ -95,7 +95,7 @@ service cloud.firestore {
           request.resource.data.email is string &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
             request.resource.data.updatedAt is timestamp)) ||
-        (signedIn() && request.auth.uid == uid &&
+        (isActiveUser() && request.auth.uid == uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['displayName', 'email', 'updatedAt']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName']) ||
