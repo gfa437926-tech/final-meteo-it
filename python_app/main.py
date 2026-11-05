@@ -3,6 +3,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
+from pathlib import Path
+import sys
 
 from excel_store import SCHEMA
 from dotenv import load_dotenv
@@ -24,7 +26,8 @@ class InventoryApp(tk.Tk):
         self.title("نظام جرد وإدارة أصول تقنية المعلومات — Python")
         self.geometry("1280x780")
         self.minsize(980, 620)
-        load_dotenv()
+        app_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+        load_dotenv(app_dir / '.env')
         self.store = create_store()
         self.configure(bg="#eef2f6")
         self._build()
