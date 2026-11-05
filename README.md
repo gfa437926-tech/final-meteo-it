@@ -1,38 +1,82 @@
-# METRA IT Assets
+# منظومة جرد وإدارة أصول تقنية المعلومات
 
-Arabic-first Flutter/Dart application for managing IT equipment inventory, office locations, and employee custody records for a meteorological organization.
+تطبيق Flutter/Dart بواجهة عربية من اليمين إلى اليسار لإدارة أصول قسم تقنية المعلومات، ومواقعها، وعهد الموظفين، والصيانة، والمشتريات، والمرفقات، وحركة الأصول.
 
-## Implemented foundation
-- Flutter Material 3 application shell with Arabic RTL layout.
-- Asset model with localized categories and lifecycle statuses.
-- Firestore asset repository, live inventory list, search and category/status filters.
-- Asset creation and editing forms with conditional CPU, RAM, and storage fields for desktop/laptop devices.
-- Safe asset retirement with reason capture, movement-history logging, and safeguards for assigned or maintenance assets.
-- Chronological asset movement register connected from the main navigation.
-- Office directory with Firestore listing, search, and office creation.
-- Custody records with transactional asset assignment and status update.
-- Live inventory summary by status and device category.
-- Firebase initialization with a clear setup error screen.
-- Firestore starter rules with admin-only writes, no client deletes, and protected audit logs.
-- GitHub Actions workflow and model serialization tests.
+> المستودع المستهدف: `gfa437926-tech/final-meteo-it` — الفرع `main`. هذا المشروع مستقل عن مشاريع METRA الخاصة بالأرصاد وقواعد بياناتها.
 
-## Run locally
-1. Install the current Flutter stable SDK and Dart.
-2. Run `flutter pub get`.
-3. Create a dedicated Firebase project for this application.
-4. Configure platform Firebase files with `flutterfire configure` and the required native platform setup.
-5. Enable Firebase Authentication and Cloud Firestore.
-6. Create the initial authorized user profile in `users/{uid}` with role `admin` or `it_manager` using a trusted administrative process.
-7. Review and deploy `firestore.rules` only after testing them in the Firebase Emulator.
-8. Run `flutter run`.
+## الوظائف الموجودة حالياً
 
-See [Firebase setup](docs/firebase-setup.md), [architecture](docs/architecture.md), [data dictionary](docs/data-dictionary.md), and [roadmap](docs/roadmap.md).
+### إدارة الأصول والمواقع
+- سجل أصول مباشر عبر Cloud Firestore مع البحث والتصفية حسب التصنيف والحالة والمكتب.
+- إنشاء الأصول وتعديلها، وحقول مواصفات الحاسوب المشروطة (المعالج والذاكرة والتخزين).
+- تطبيع الرقم التسلسلي والتحقق من تفرّده باستخدام حجوزات ذرّية في Firestore، مع فحص توافق للسجلات القديمة.
+- إيقاف/إحالة الأصل مع تسجيل السبب وحركة الأصل، ومنع الإحالة عند وجود عهدة أو صيانة مفتوحة.
+- دليل المكاتب/المواقع مع البحث والإضافة.
+- سجل زمني لحركات الأصول، وماسح QR/باركود للعثور على الأصل.
 
-## Current limitations
-- Firebase project credentials and real organization data are intentionally not included.
-- Authentication UI, role administration, office-scoped permissions, spare-parts records, and document attachments are not complete.
-- Duplicate serial detection currently runs in the client and is not a concurrency-safe uniqueness guarantee.
-- Excel/PDF exports and Google Sheets synchronization remain pending.
-- The repository has not yet been verified by a production build or deployed to end-user devices.
+### العهد والصيانة والمشتريات
+- إنشاء العهد وإعادتها ونقلها بين الموظفين، مع تحديث حالة الأصل ضمن معاملات Firestore.
+- اعتماد أو رفض العهد وتسجيل المنفّذ والتوقيت والسبب وسجل الحركة.
+- نماذج تسليم/استلام عربية قابلة للطباعة مع مساحات التوقيع.
+- تذاكر الصيانة وفتحها وإغلاقها وتسجيل الحل والتكلفة وسجل الخدمة.
+- سجل قطع الغيار ومؤشرات انخفاض المخزون وصرف القطع لتذاكر الصيانة.
+- تسجيل المشتريات والمورد والفاتورة والتكلفة وتاريخ الشراء والضمان.
+- رفع مرفقات الأصول والفواتير والضمانات إلى Firebase Storage مع بيانات وصفية ومسارات محمية.
 
-Do not use real operational data until Firebase is configured, access rules are reviewed, and authorization tests are completed.
+### التقارير والاستيراد
+- لوحة ملخص مباشر للأصول حسب الحالة والفئة.
+- تقارير مفلترة حسب الفئة والحالة والمكتب.
+- تصدير CSV ومشاركة الملف، وتصدير مصنف Excel.
+- تقرير عربي RTL للطباعة من المتصفح وحفظه PDF عبر نافذة الطباعة؛ هذا المسار HTML/Print وليس توليد PDF عربي أصلي بخط مضمّن.
+- استيراد CSV مع معاينة الصفوف والتحقق من البيانات والأرقام التسلسلية والمكاتب، وتسجيل نتيجة الدفعة والأخطاء في سجل تدقيق.
+- إنشاء وطباعة ملصقات QR للأصول بصيغة PDF؛ دعم تضمين خط عربي داخل PDF ما زال مطلوباً.
+
+### الهوية والأمان
+- تسجيل دخول Firebase Email/Password.
+- السماح بالدخول للحسابات النشطة التي لها ملف مستخدم صحيح بدور `admin` أو `it_manager`.
+- إدارة ملفات المستخدمين والأدوار والحالة بواسطة المدير الأعلى؛ إنشاء حساب Authentication وكلمة المرور يتم عبر قناة إدارية موثوقة وليس من تطبيق العميل.
+- قواعد Firestore وStorage واختبارات Emulator ضمن GitHub Actions.
+- قيود على تحديث الملف الشخصي، والتحقق من الحقول والأنواع والطوابع الزمنية، ومنع حذف السجلات أو تعديل سجلات التدقيق من العميل.
+- رفع الملفات مقيد بنوع المحتوى والحجم، مع منع الاستبدال والحذف من العميل.
+
+## تشغيل التطوير محلياً
+
+1. تثبيت Flutter stable وDart وNode.js 20+ وJava 21 وFirebase CLI.
+2. من جذر المستودع:
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+npm install
+npx firebase emulators:exec --only firestore,storage --project demo-metra-it-assets "npm run test:rules"
+```
+
+3. أنشئ مشروع Firebase مخصصاً لهذا التطبيق فقط، ثم فعّل Authentication (Email/Password) وCloud Firestore وStorage.
+4. أنشئ إعدادات المنصة محلياً بواسطة:
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
+
+5. أنشئ حساب المدير الأول في Firebase Authentication، ثم أنشئ ملف `users/{uid}` من قناة إدارية موثوقة وفق الحقول والأنواع المحددة في `docs/security-model.md`.
+6. راجع القواعد واختبرها على Emulator، ثم تحقق من معرّف مشروع Firebase المحدد قبل أي نشر يدوي.
+
+تفاصيل الإعداد: [Firebase setup](docs/firebase-setup.md) · [Security model](docs/security-model.md) · [Architecture](docs/architecture.md) · [Data dictionary](docs/data-dictionary.md) · [Roadmap](docs/roadmap.md) · [Backup/restore](docs/backup-restore.md) · [CSV import](docs/import-template.md)
+
+## ما لم يكتمل قبل التشغيل الإنتاجي
+
+- إعداد مشروع Firebase مخصص وربط إعدادات Android/Windows/Web، ثم مراجعة ونشر قواعد Firestore/Storage إلى المشروع الصحيح.
+- إنشاء الحسابات عبر خدمة موثوقة، وتطبيق صلاحيات على مستوى المكتب/الإدارة؛ النموذج الحالي يتيح دورين تشغيليين فقط ولا يحقق العزل بين المكاتب.
+- ربط Google Sheets فعلياً عبر OAuth وتدفق استيراد/تصدير معتمد.
+- استكمال دورة الفاتورة والإيصال ومعاينة المستندات، وإنتاج PDF عربي أصلي بخطوط مضمّنة.
+- إعداد نسخ احتياطي مجدول ومراقبة إنتاجية وتنفيذ تجربة استعادة موثقة.
+- إنشاء والتحقق من حزم Android وWindows وWeb، واختبار الأجهزة والكاميرا ومشاركة الملفات.
+- استكمال فحص أمني وتشغيلي قبل إدخال بيانات حقيقية.
+
+## بوابة الجاهزية
+
+آخر تحقق CI موثق على الفرع `main` هو التشغيل [#240](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41936741188)، وقد نجح فيه كل من Flutter analyze وFlutter tests واختبارات Firestore/Storage Emulator. نجاح CI يثبت اجتياز الفحوص الآلية فقط، ولا يعني أن Firebase الإنتاجي مضبوط أو أن التطبيق جاهز للنشر.
+
+**لا تستخدم بيانات تشغيلية حقيقية قبل إكمال إعداد Firebase المخصص، ومراجعة الصلاحيات، وتجارب الاستعادة، وبناء واختبار التطبيقات على الأجهزة المستهدفة.**
