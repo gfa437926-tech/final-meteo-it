@@ -12,6 +12,7 @@ from storage_factory import create_store
 from export_tools import export_workbook
 from import_tools import import_workbook
 from backup_tools import create_backup, suggested_backup_name
+from restore_tools import restore_backup
 from validation import validate_record
 
 def filter_rows(rows, query: str):
@@ -85,6 +86,7 @@ class InventoryApp(tk.Tk):
         ttk.Button(actions, text="تصدير نسخة Excel", command=self._export_excel).pack(side="right", padx=5)
         ttk.Button(actions, text="استيراد من Excel", command=self._import_excel).pack(side="right", padx=5)
         ttk.Button(actions, text="نسخة احتياطية", command=self._backup_database).pack(side="right", padx=5)
+        ttk.Button(actions, text="استعادة نسخة", command=self._restore_database).pack(side="right", padx=5)
 
     def _refresh_dashboard(self):
         for sheet, label in self.dashboard_labels.items():
@@ -124,6 +126,26 @@ class InventoryApp(tk.Tk):
             messagebox.showinfo("اكتملت النسخة الاحتياطية", f"تم حفظ النسخة في:\n{backup_path}")
         except Exception as exc:
             messagebox.showerror("فشل النسخ الاحتياطي", str(exc))
+
+    def _restore_database(self):
+        is_excel = getattr(self.store, "path", None) is not None
+        source = filedialog.askopenfilename(
+            title="اختيار نسخة احتياطية للاستعادة",
+            filetypes=[("Excel Backup", "*.xlsx")] if is_excel else [("PostgreSQL Backup", "*.dump"), ("All files", "*.*")],
+        )
+        if not source:
+            return
+        warning = ("ستُستبدل قاعدة Excel الحالية، وسيُحفظ ملف احتياطي قبل الاستعادة." if is_excel else
+                   "ستُطبّق النسخة على قاعدة PostgreSQL الحالية وقد تستبدل الجداول والبيانات. تأكد من اختيار الملف الصحيح.")
+        if not messagebox.askyesno("تأكيد الاستعادة — إجراء حساس", warning + "\n\nهل تريد المتابعة؟"):
+            return
+        try:
+            restore_backup(self.store, source)
+            self._refresh_dashboard()
+            self._reload_current()
+            messagebox.showinfo("تمت الاستعادة", "تمت استعادة النسخة الاحتياطية.")
+        except Exception as exc:
+            messagebox.showerror("فشلت الاستعادة", str(exc))
 
     def _import_excel(self):
         source = filedialog.askopenfilename(
