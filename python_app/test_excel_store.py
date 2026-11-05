@@ -35,5 +35,12 @@ class ExcelStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "فئة الأصل"):
             self.store.add_row("Assets", {"serial_number": "SN-3"})
 
+    def test_custody_must_reference_a_registered_asset(self):
+        asset = self.store.add_row("Assets", {"category": "حاسوب", "serial_number": "LINK-1"})
+        custody = self.store.add_row("Custody", {"asset_serial": "link-1", "employee": "موظف"})
+        self.assertEqual(custody["asset_id"], asset["id"])
+        with self.assertRaisesRegex(ValueError, "غير موجود"):
+            self.store.add_row("Custody", {"asset_serial": "UNKNOWN", "employee": "موظف"})
+
 if __name__ == "__main__":
     unittest.main()
