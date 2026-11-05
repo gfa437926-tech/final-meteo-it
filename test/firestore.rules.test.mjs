@@ -179,22 +179,38 @@ test('rejection must close the card and release its assigned asset atomically', 
 });
 
 
-test('import batch audit records are append-only and actor-bound', async () => {
+test('import batch audit records validate counts, types, actor and remain append-only', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
-  await assertFails(setDoc(doc(db, 'import_batches', 'forged'), {
-    createdBy: 'manager-1',
-    status: 'completed',
-    succeededRows: 4,
-  }));
-  await assertSucceeds(setDoc(doc(db, 'import_batches', 'batch-1'), {
+  const validBatch = {
+    sourceName: 'assets.csv',
     createdBy: 'admin-1',
-    status: 'completed',
+    createdAt: new Date(),
+    completedAt: new Date(),
+    totalRows: 4,
+    attemptedRows: 4,
     succeededRows: 4,
     failedRows: 0,
+    skippedInvalidRows: 0,
+    status: 'completed',
+    rowErrors: [],
+  };
+  await assertFails(setDoc(doc(db, 'import_batches', 'forged'), {
+    ...validBatch, createdBy: 'manager-1',
+  }));
+  await assertSucceeds(setDoc(doc(db, 'import_batches', 'batch-1'), validBatch));
+  await assertFails(setDoc(doc(db, 'import_batches', 'bad-counts'), {
+    ...validBatch, succeededRows: 3,
+  }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'bad-type'), {
+    ...validBatch, totalRows: '4',
+  }));
+  await assertFails(setDoc(doc(db, 'import_batches', 'extra-field'), {
+    ...validBatch, password: 'must-not-be-stored',
   }));
   await assertFails(updateDoc(doc(db, 'import_batches', 'batch-1'), {
     succeededRows: 500,
   }));
+  await assertFails(deleteDoc(doc(db, 'import_batches', 'batch-1')));
 });
 
 test('active users can read private asset attachments', async () => {
