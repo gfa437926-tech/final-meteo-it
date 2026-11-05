@@ -48,6 +48,7 @@
 - [x] Add Arabic RTL printable inventory report with filter-aware summaries and browser Print / Save as PDF flow (native embedded-font PDF export remains pending)
 - [x] Define the secure Google Sheets import/export contract and acceptance criteria (implementation remains pending)
 - [ ] Implement Google Sheets import/export with validation, staging preview, idempotent writes, and audit trail
+- [x] Validate import-batch audit schema, actor identity, counters, status consistency, and append-only behavior in Firestore rules and Emulator tests
 - [x] Author Firestore/Storage Emulator security tests and add a dedicated CI job
 - [x] Document dedicated Firebase Firestore/Storage backup and restore runbook (execution and restore drills remain operational tasks)
 - [x] Verify Firestore/Storage Emulator authorization suite in CI, including inactive-user read denial and attachment overwrite/delete denial (run `41935041019`)
