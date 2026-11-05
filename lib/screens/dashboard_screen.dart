@@ -299,7 +299,13 @@ class _NavItem extends StatelessWidget {
       dense: true, selected: selected, selectedTileColor: Colors.white.withValues(alpha: .13),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       leading: Icon(icon, color: Colors.white70), title: Text(label, style: const TextStyle(color: Colors.white)),
-      onTap: destination == null ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => destination!)),
+      onTap: destination == null ? null : () {
+        // Close the responsive drawer before opening the selected module.
+        Scaffold.maybeOf(context)?.closeDrawer();
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => destination!),
+        );
+      },
     ),
   );
 }
