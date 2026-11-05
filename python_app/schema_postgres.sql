@@ -6,6 +6,17 @@ CREATE TABLE IF NOT EXISTS maintenance(id text PRIMARY KEY,asset_id text,asset_s
 CREATE TABLE IF NOT EXISTS purchases(id text PRIMARY KEY,purchase_number text,supplier text,invoice_number text,purchase_date text,total_cost text,warranty_until text,notes text);
 CREATE TABLE IF NOT EXISTS spare_parts(id text PRIMARY KEY,name text,part_number text,quantity text,unit_cost text,location text,notes text,updated_at timestamptz);
 CREATE TABLE IF NOT EXISTS audit_logs(log_id bigserial PRIMARY KEY,timestamp timestamptz NOT NULL DEFAULT now(),username text,action text,sheet text,record_id text,details text);
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_custody_asset') THEN
+    ALTER TABLE custody ADD CONSTRAINT fk_custody_asset
+      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE RESTRICT NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_maintenance_asset') THEN
+    ALTER TABLE maintenance ADD CONSTRAINT fk_maintenance_asset
+      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE RESTRICT NOT VALID;
+  END IF;
+END $;
 CREATE INDEX IF NOT EXISTS ix_custody_asset_id ON custody(asset_id);
 CREATE INDEX IF NOT EXISTS ix_maintenance_asset_id ON maintenance(asset_id);
 CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp DESC);
