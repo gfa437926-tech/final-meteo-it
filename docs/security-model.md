@@ -39,7 +39,7 @@ This is a baseline for development and controlled pre-pilot validation, not a co
 - The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
 - Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
 - Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
-- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. The latest verified run (#240, commit `4517e8a`) passed both this job and Flutter analysis/unit tests. Recheck the latest run before any rules deployment.
+- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. The latest verified run (#249, commit `3c017d5a`) passed both this job and Flutter analysis/unit tests, including valid/invalid completed, partial, and failed import-batch summaries. Recheck the latest run before any rules deployment.
 
 
 ## File attachment controls
