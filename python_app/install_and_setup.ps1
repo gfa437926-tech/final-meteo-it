@@ -99,8 +99,8 @@ INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/me
     & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
     if ($LASTEXITCODE -ne 0) { throw 'تعذر تثبيت مكتبات Python.' }
     $env:INVENTORY_DATABASE_URL = "postgresql://inventory_app:$appPassword@localhost:5432/meteo_inventory"
-    & .\.venv\Scripts\python.exe -c "import psycopg,os; psycopg.connect(os.environ['INVENTORY_DATABASE_URL']).execute('SELECT 1'); print('DATABASE_OK')"
-    if ($LASTEXITCODE -ne 0) { throw 'فشل اختبار اتصال Python بقاعدة البيانات.' }
+    & .\.venv\Scripts\python.exe -c "import psycopg,os; c=psycopg.connect(os.environ['INVENTORY_DATABASE_URL']); c.execute('SELECT 1'); c.execute('BEGIN'); c.execute(\"INSERT INTO assets(id,category) VALUES ('__installer_permission_check__','test')\"); c.rollback(); c.close(); print('DATABASE_AND_WRITE_PERMISSIONS_OK')"
+    if ($LASTEXITCODE -ne 0) { throw 'فشل اختبار اتصال التطبيق أو صلاحيات الكتابة في قاعدة البيانات.' }
   } finally { Pop-Location }
   Step 'تحويل البرنامج إلى تطبيق EXE مناسب لمعمارية هذا الجهاز'
   Push-Location $AppDir
