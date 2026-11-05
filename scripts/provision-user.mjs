@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { stdin, stdout } from 'node:process';
+import { validateProvisioningInput } from './provision-user-validation.mjs';
 
 function option(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -35,26 +36,17 @@ async function main() {
   const role = required('role');
   const confirmation = required('confirm-project');
 
-  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
-    throw new Error('Invalid Firebase project ID format.');
-  }
-  if (confirmation !== projectId) {
-    throw new Error('Project confirmation did not match. No data was written.');
-  }
-  if (uid.length < 1 || uid.length > 128 || uid.includes('/') || /[\\u0000-\\u001f]/.test(uid)) {
-    throw new Error('UID format is invalid. Copy the exact UID from Firebase Authentication.');
-  }
-  if (!displayName || displayName.length > 120) {
-    throw new Error('Display name must contain 1–120 characters.');
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('A valid email address is required.');
-  }
-  if (!['admin', 'it_manager'].includes(role)) {
-    throw new Error('Role must be admin or it_manager.');
-  }
+  const validated = validateProvisioningInput({
+    projectId, confirmation, uid, displayName, email, role,
+  });
 
-  const typed = await prompt(`Type CREATE PROFILE to provision ${uid} in ${projectId}: `);
+  const safeProjectId = validated.projectId;
+  const safeUid = validated.uid;
+  const safeDisplayName = validated.displayName;
+  const safeEmail = validated.email;
+  const safeRole = validated.role;
+
+  const typed = await prompt(`Type CREATE PROFILE to provision ${safeUid} in ${safeProjectId}: `);
   if (typed !== 'CREATE PROFILE') {
     stdout.write('Cancelled. No data was written.\n');
     return;
@@ -73,14 +65,14 @@ async function main() {
   if (!accessToken) throw new Error('Google Cloud ADC returned an empty access token.');
 
   const fields = {
-    displayName: firestoreValue(displayName),
-    email: firestoreValue(email),
-    role: firestoreValue(role),
+    displayName: firestoreValue(safeDisplayName),
+    email: firestoreValue(safeEmail),
+    role: firestoreValue(safeRole),
     isActive: firestoreValue(true),
     createdAt: { timestampValue: new Date().toISOString() },
   };
   const endpoint = new URL(
-    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`,
+    `https://firestore.googleapis.com/v1/projects/${safeProjectId}/databases/(default)/documents/users/${encodeURIComponent(safeUid)}`,
   );
   endpoint.searchParams.set('currentDocument.exists', 'false');
 
@@ -101,7 +93,7 @@ async function main() {
     throw new Error(`Firestore rejected provisioning (${response.status}): ${detail}`);
   }
 
-  stdout.write(`Created active ${role} profile for ${email} (UID: ${uid}) in ${projectId}.\n`);
+  stdout.write(`Created active ${safeRole} profile for ${safeEmail} (UID: ${safeUid}) in ${safeProjectId}.\n`);
   stdout.write('Authentication account/password were not created or changed.\n');
 }
 
