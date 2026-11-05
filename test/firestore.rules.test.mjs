@@ -109,6 +109,21 @@ test('users can edit only string profile fields and timestamp metadata', async (
   }));
 });
 
+
+test('inactive users cannot update their own profile', async () => {
+  const db = env.authenticatedContext('inactive-1').firestore();
+  await assertFails(updateDoc(doc(db, 'users', 'inactive-1'), {
+    displayName: 'Inactive account edit',
+  }));
+});
+
+test('active users can update their own permitted profile fields', async () => {
+  const db = env.authenticatedContext('manager-1').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'users', 'manager-1'), {
+    displayName: 'Active account edit',
+  }));
+});
+
 test('super administrator cannot change own role or active state', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
   await assertFails(updateDoc(doc(db, 'users', 'admin-1'), {
