@@ -148,3 +148,18 @@ node scripts/provision-user.mjs --project YOUR_DEDICATED_PROJECT_ID --confirm-pr
 5. Verify the resulting `users/{uid}` document and sign-in with the account.
 
 The operation is create-only: Firestore's `currentDocument.exists=false` precondition prevents overwriting an existing profile. If the UID already has a profile, the script stops and leaves it unchanged. The ADC identity must have narrowly scoped permission to create documents in the dedicated project's Firestore database. Do not grant broad project-owner access just to run this script, and never copy ADC files or tokens into the repository or Flutter application. The script does not modify Firestore rules, create Authentication accounts, or touch any other Firebase project.
+
+
+## Automated security checks
+
+The repository now runs the provisioning-input tests and the Firestore/Storage emulator suite in GitHub Actions on pushes to `main`, pull requests, and manual dispatch. The workflow is `.github/workflows/security-tests.yml`.
+
+Run the same checks locally:
+
+```bash
+npm ci
+npm run test:provision
+npx firebase-tools emulators:exec --only firestore,storage --project demo-metra-it-assets "npm run test:rules"
+```
+
+Or run both suites through `npm test` inside the emulator command. The demo project ID is reserved for local emulators; these tests do not access a production Firebase project.
