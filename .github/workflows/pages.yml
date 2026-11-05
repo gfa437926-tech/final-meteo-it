@@ -34,6 +34,28 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Validate Firebase configuration
+        shell: bash
+        run: |
+          values=(
+            "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_MESSAGING_SENDER_ID"
+            "$FIREBASE_PROJECT_ID" "$FIREBASE_AUTH_DOMAIN" "$FIREBASE_STORAGE_BUCKET"
+          )
+          configured=0
+          missing=0
+          for value in "${values[@]}"; do
+            if [[ -n "$value" ]]; then configured=$((configured + 1)); else missing=$((missing + 1)); fi
+          done
+          if (( configured != 0 && missing != 0 )); then
+            echo "Firebase configuration is partial: set all six repository Actions Variables or leave all six empty."
+            exit 1
+          fi
+          if (( configured == 0 )); then
+            echo "Firebase variables are not configured; the app will deploy its setup screen."
+          else
+            echo "All six Firebase web configuration variables are present."
+          fi
+
       - name: Generate Flutter web platform
         run: flutter create . --platforms=web
 
