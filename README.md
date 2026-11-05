@@ -70,7 +70,7 @@ flutterfire configure
 5. أنشئ حساب المدير الأول في Firebase Authentication، ثم أنشئ ملف `users/{uid}` من قناة إدارية موثوقة وفق الحقول والأنواع المحددة في `docs/security-model.md`.
 6. راجع القواعد واختبرها على Emulator، ثم تحقق من معرّف مشروع Firebase المحدد قبل أي نشر يدوي.
 
-تفاصيل الإعداد: [Firebase setup](docs/firebase-setup.md) · [Security model](docs/security-model.md) · [Architecture](docs/architecture.md) · [Data dictionary](docs/data-dictionary.md) · [Roadmap](docs/roadmap.md) · [Backup/restore](docs/backup-restore.md) · [CSV import](docs/import-template.md)
+تفاصيل الإعداد: [Firebase setup](docs/firebase-setup.md) · [Trusted user provisioning](scripts/provision-user.mjs) · [Security model](docs/security-model.md) · [Architecture](docs/architecture.md) · [Data dictionary](docs/data-dictionary.md) · [Roadmap](docs/roadmap.md) · [Backup/restore](docs/backup-restore.md) · [CSV import](docs/import-template.md)
 
 ## ما لم يكتمل قبل التشغيل الإنتاجي
 
