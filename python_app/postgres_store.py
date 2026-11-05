@@ -6,7 +6,7 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 from excel_store import SCHEMA
-from validation import validate_record
+from validation import resolve_asset_reference, validate_record
 
 TABLES={"Assets":"assets","Offices":"offices","Custody":"custody","Maintenance":"maintenance","Purchases":"purchases","SpareParts":"spare_parts","AuditLog":"audit_logs"}
 
@@ -28,6 +28,7 @@ class PostgresStore:
     def add_row(self,sheet: str,values: dict[str,Any])->dict[str,Any]:
         if sheet not in TABLES or sheet=="AuditLog": raise ValueError("This worksheet is not editable")
         clean={k:values.get(k) for k in SCHEMA[sheet]}
+        resolve_asset_reference(self,sheet,clean)
         validate_record(sheet,clean)
         clean["id"]=clean.get("id") or f'{sheet.lower()}-{datetime.now().strftime("%Y%m%d%H%M%S%f")}'
         if sheet=="Assets": clean["serial_number"]=str(clean.get("serial_number") or "").strip().upper() or None
@@ -45,6 +46,7 @@ class PostgresStore:
         if sheet not in TABLES or sheet=="AuditLog": raise ValueError("This worksheet is not editable")
         updates={k:v for k,v in values.items() if k in SCHEMA[sheet] and k!="id"}
         if not updates: return
+        resolve_asset_reference(self,sheet,updates)
         validate_record(sheet,updates,require_fields=False)
         if sheet=="Assets" and "serial_number" in updates: updates["serial_number"]=str(updates["serial_number"] or "").strip().upper() or None
         if "updated_at" in SCHEMA[sheet]: updates["updated_at"]=datetime.now().astimezone().isoformat(timespec="seconds")
