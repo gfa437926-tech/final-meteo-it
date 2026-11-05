@@ -22,6 +22,6 @@ def restore_backup(store, source: str | Path) -> Path:
     if not exe: raise FileNotFoundError("لم يتم العثور على pg_restore.")
     env=os.environ.copy(); env.update(PGPASSWORD=unquote(parsed.password or ""),PGHOST=parsed.hostname,PGPORT=str(parsed.port or 5432),PGUSER=unquote(parsed.username or ""),PGDATABASE=parsed.path.lstrip("/"))
     # Clean restore is intentionally not automatic; pg_restore merges/replaces objects according to flags.
-    result=subprocess.run([exe,"--clean","--if-exists","--no-owner","--no-acl","--no-password","--dbname",dsn,str(backup)],env=env,capture_output=True,text=True,timeout=300,check=False)
+    result=subprocess.run([exe,"--clean","--if-exists","--no-owner","--no-acl","--no-password","--dbname",unquote(parsed.path.lstrip("/")),str(backup)],env=env,capture_output=True,text=True,timeout=300,check=False)
     if result.returncode: raise RuntimeError((result.stderr or "فشلت استعادة PostgreSQL.")[-2500:])
     return backup
