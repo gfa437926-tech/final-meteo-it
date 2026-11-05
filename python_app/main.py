@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -9,6 +9,7 @@ import sys
 from excel_store import SCHEMA
 from dotenv import load_dotenv
 from storage_factory import create_store
+from export_tools import export_workbook
 
 def filter_rows(rows, query: str):
     """Return rows containing the case-insensitive query in any field."""
@@ -48,13 +49,59 @@ class InventoryApp(tk.Tk):
         tk.Label(header, text="نسخة Python مستقلة — PostgreSQL محلي أو Excel — دون Firebase أو Docker", bg="#173b5e", fg="#d7e7f5", font=("Arial", 10), anchor="e").pack(fill="x", padx=26, pady=(2, 10))
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True, padx=14, pady=14)
+        self.dashboard_labels = {}
+        dashboard = ttk.Frame(self.tabs, padding=24)
+        self.tabs.add(dashboard, text="لوحة المعلومات")
+        self._build_dashboard(dashboard)
         for sheet, (title, fields) in LABELS.items():
             frame = ttk.Frame(self.tabs)
             self.tabs.add(frame, text=title)
             self._build_table(frame, sheet, fields)
+        self._refresh_dashboard()
         storage_info = getattr(self.store, "path", "PostgreSQL — localhost / meteo_inventory")
         footer = tk.Label(self, text=f"مصدر البيانات المحلي: {storage_info}", bg="#eef2f6", fg="#526273", anchor="w")
         footer.pack(fill="x", padx=18, pady=(0, 8))
+
+    def _build_dashboard(self, parent):
+        ttk.Label(parent, text="ملخص نظام جرد الأصول", font=("Arial", 20, "bold"), anchor="e").pack(fill="x", pady=(8, 18))
+        ttk.Label(parent, text="إحصاءات مباشرة من قاعدة البيانات المحلية", anchor="e").pack(fill="x", pady=(0, 16))
+        cards = ttk.Frame(parent)
+        cards.pack(fill="x", pady=8)
+        sections = [("Assets", "الأصول"), ("Offices", "المكاتب"), ("Custody", "العهد"), ("Maintenance", "عمليات الصيانة"), ("Purchases", "المشتريات"), ("SpareParts", "قطع الغيار")]
+        for index, (sheet, title) in enumerate(sections):
+            card = ttk.LabelFrame(cards, text=title, padding=18)
+            card.grid(row=index // 3, column=index % 3, padx=8, pady=8, sticky="nsew")
+            value = ttk.Label(card, text="—", font=("Arial", 22, "bold"))
+            value.pack()
+            self.dashboard_labels[sheet] = value
+        for col in range(3):
+            cards.columnconfigure(col, weight=1)
+        actions = ttk.Frame(parent)
+        actions.pack(fill="x", pady=18)
+        ttk.Button(actions, text="تحديث الإحصاءات", command=self._refresh_dashboard).pack(side="right", padx=5)
+        ttk.Button(actions, text="تصدير نسخة Excel", command=self._export_excel).pack(side="right", padx=5)
+
+    def _refresh_dashboard(self):
+        for sheet, label in self.dashboard_labels.items():
+            try:
+                label.config(text=f"{len(self.store.list_rows(sheet)):,}")
+            except Exception:
+                label.config(text="—")
+
+    def _export_excel(self):
+        destination = filedialog.asksaveasfilename(
+            title="حفظ نسخة Excel من بيانات الجرد",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Workbook", "*.xlsx")],
+            initialfile="نسخة_جرد_الأصول.xlsx",
+        )
+        if not destination:
+            return
+        try:
+            export_workbook(self.store, destination)
+            messagebox.showinfo("اكتمل التصدير", f"تم تصدير جميع الأقسام إلى:\n{destination}")
+        except Exception as exc:
+            messagebox.showerror("فشل التصدير", str(exc))
 
     def _build_table(self, parent, sheet, fields):
         bar = ttk.Frame(parent, padding=8)
@@ -171,6 +218,7 @@ class InventoryApp(tk.Tk):
                 sheet = next((s for s, (title, _) in LABELS.items() if title == self.tabs.tab(tab_index, "text")), None)
                 if sheet:
                     self._refresh(sheet, child, LABELS[sheet][1])
+                self._refresh_dashboard()
                 return
 
 if __name__ == "__main__":
