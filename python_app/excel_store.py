@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from validation import validate_record
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -114,6 +115,7 @@ class ExcelStore:
             raise ValueError("This worksheet is not editable")
         rows = self._read_rows(sheet)
         clean = {key: values.get(key) for key in SCHEMA[sheet]}
+        validate_record(sheet, clean)
         clean["id"] = clean.get("id") or f"{sheet.lower()}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
         if sheet == "Assets":
             serial = str(clean.get("serial_number") or "").strip().upper()
@@ -136,6 +138,7 @@ class ExcelStore:
         for row in rows:
             if str(row.get("id")) == str(record_id):
                 updated = {**row, **values}
+                validate_record(sheet, updated, require_fields=False)
                 if sheet == "Assets":
                     serial = str(updated.get("serial_number") or "").strip().upper()
                     if serial and any(str(r.get("id")) != str(record_id) and str(r.get("serial_number") or "").strip().upper() == serial for r in rows):
