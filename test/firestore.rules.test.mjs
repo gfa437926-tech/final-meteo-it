@@ -149,12 +149,25 @@ test('custody assignment requires atomic asset reservation and pending approval'
   }));
 });
 
-test('only the authenticated approver can approve a pending custody card', async () => {
+test('only the authenticated approver can approve a pending custody card with an assigned asset', async () => {
   const db = env.authenticatedContext('admin-1').firestore();
   await assertFails(updateDoc(doc(db, 'custody_cards', 'card-2'), {
     approvalStatus: 'approved',
     approvedBy: 'another-user',
     approvedAt: new Date(),
+  }));
+  await assertFails(updateDoc(doc(db, 'custody_cards', 'card-2'), {
+    approvalStatus: 'approved',
+    approvedBy: 'admin-1',
+    approvedAt: 'not-a-timestamp',
+  }));
+  await assertFails(runTransaction(db, async (tx) => {
+    tx.update(doc(db, 'assets', 'asset-2'), { status: 'available' });
+    tx.update(doc(db, 'custody_cards', 'card-2'), {
+      approvalStatus: 'approved',
+      approvedBy: 'admin-1',
+      approvedAt: new Date(),
+    });
   }));
   await assertSucceeds(updateDoc(doc(db, 'custody_cards', 'card-2'), {
     approvalStatus: 'approved',
