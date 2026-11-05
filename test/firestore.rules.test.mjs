@@ -64,6 +64,43 @@ after(async () => {
   await env.cleanup();
 });
 
+test('office records enforce a bounded schema and cannot be deleted', async () => {
+  const db = env.authenticatedContext('admin-1').firestore();
+  const validOffice = {
+    id: 'office-1',
+    name: 'مكتب الاختبار',
+    building: 'المبنى الرئيسي',
+    directorate: 'تقنية المعلومات',
+    department: 'الدعم',
+    room: '12',
+    manager: 'مسؤول المكتب',
+    phone: '+000000000',
+    notes: '',
+    isActive: true,
+  };
+
+  await assertSucceeds(setDoc(doc(db, 'offices', 'office-1'), validOffice));
+  await assertSucceeds(updateDoc(doc(db, 'offices', 'office-1'), {
+    name: 'مكتب محدث',
+    isActive: false,
+  }));
+  await assertFails(setDoc(doc(db, 'offices', 'office-extra-field'), {
+    ...validOffice,
+    id: 'office-extra-field',
+    adminOverride: true,
+  }));
+  await assertFails(setDoc(doc(db, 'offices', 'office-bad-name'), {
+    ...validOffice,
+    id: 'office-bad-name',
+    name: '',
+  }));
+  await assertFails(setDoc(doc(db, 'offices', 'office-id-mismatch'), {
+    ...validOffice,
+    id: 'different-id',
+  }));
+  await assertFails(deleteDoc(doc(db, 'offices', 'office-1')));
+});
+
 test('inactive profiles cannot read inventory', async () => {
   const db = env.authenticatedContext('inactive-1').firestore();
   await assertFails(getDoc(doc(db, 'assets', 'asset-1')));
