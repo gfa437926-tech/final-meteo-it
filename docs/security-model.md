@@ -3,11 +3,11 @@
 ## Authentication and profiles
 
 - Firebase Authentication uses Email/Password.
-- Every authenticated user must have a matching `users/{uid}` Firestore profile with `isActive: true`.
+- Every authenticated user must have a matching `users/{uid}` Firestore profile with `isActive: true` before accessing inventory data.
 - The application currently admits only `admin` and `it_manager` roles.
 - A super administrator (`admin`) can create and update profile documents for other Firebase Authentication accounts.
 - The application does not create Authentication accounts or passwords. Create accounts through a trusted Firebase Admin SDK process or the Firebase Console, then register their UID in the application.
-- Users may update only their own `displayName`, `email`, and `updatedAt` profile fields; name/email must remain strings and `updatedAt` must be a Firestore timestamp. They cannot change their own role or active state. New profiles require a supported role, boolean active flag, string name/email, and timestamp creation metadata; optional update metadata must also be a timestamp.
+- Users may update only their own `displayName`, `email`, and `updatedAt` profile fields; they cannot change their own role or active state.
 - User deletion is disabled from the client.
 
 ## Current permission matrix
@@ -29,50 +29,39 @@
 - Custody assignment, return, transfer, asset office transfer, retirement, and maintenance state changes use Firestore transactions and write movement history.
 - Maintenance completion reads the persisted ticket and asset state instead of trusting the screen's stale record object.
 
-## Release limitations
+## Firestore and Storage controls
 
-This is a baseline for development and controlled pre-pilot validation, not a complete enterprise authorization model. Office-scoped roles and trusted server-side account provisioning remain unimplemented. Firestore/Storage Emulator authorization tests now run in CI, but production Firebase configuration/deployment, backup execution and restore drills, and production monitoring remain required before operational use.
+- Administrative predicates require an authenticated user with an active profile and an allowed role.
+- Inventory reads require an active profile; administrative writes require an active admin/IT-manager profile.
+- User role elevation is blocked by rules; only a super administrator can manage another user's profile.
+- Import batch audit records are actor-bound, schema-validated, bounded to 100 rows, and append-only.
+- Asset attachments are private, limited to approved MIME types and less than 10 MB; client updates and deletes are denied.
+- Emulator tests cover authentication/profile gates, role elevation, custody atomicity, import audit validation, and Storage access restrictions.
 
+## Release limitations and production gates
 
-## Firestore rule hardening
+This remains a development and controlled pre-pilot baseline, not a production-ready enterprise authorization model.
 
-- The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
-- Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
-- Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
-- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. The latest verified run (#249, commit `3c017d5a`) passed both this job and Flutter analysis/unit tests, including valid/invalid completed, partial, and failed import-batch summaries. Recheck the latest run before any rules deployment.
+1. **Firebase project and web app:** create/select a dedicated Firebase project for this IT inventory app, register its Web app, and set the six documented GitHub Actions repository Variables. The Pages workflow currently builds and deploys a deliberate setup screen when these values are absent; a successful Pages deployment does not prove Firebase connectivity.
+2. **Rules deployment:** review the selected Firebase project ID, run the emulator suite, then deploy Firestore and Storage rules only to the dedicated inventory project. No production rules have been deployed by this repository workflow.
+3. **Authorization:** office-scoped roles, office-level data isolation, and trusted server-side account provisioning remain unimplemented. Current rules allow active admin/IT-manager accounts broad inventory access.
+4. **App Check and privileged sign-in:** configure and verify App Check per supported platform, enforce MFA for privileged accounts where supported, and test all production clients before enforcement.
+5. **Data operations:** complete the serial reservation backfill, configure scheduled backups, and perform a documented restore drill before bulk import.
+6. **Operational validation:** configure monitoring/alerts and verify Android, Windows, and Web builds on real target devices.
 
+Never reuse or deploy to a meteorological production Firebase project. Never put service-account JSON, private keys, or Admin SDK credentials in the Flutter client, GitHub Variables, or repository.
 
-## File attachment controls
+## GitHub Pages web configuration
 
-- Asset documents are stored in Firebase Storage under an asset-specific path; Firestore stores metadata and the storage path, not a public download-token URL.
-- Storage reads require an active user profile; uploads require an active `admin` or `it_manager` profile.
-- Upload rules restrict content types and enforce a 10 MB limit. Client-side upload and download are performed through authenticated Firebase Storage SDK calls.
-- Storage updates and deletes are denied from the client. Deploy and verify `storage.rules` before enabling this feature.
+The Pages workflow reads these repository Actions Variables:
 
+- `FIREBASE_API_KEY`
+- `FIREBASE_APP_ID`
+- `FIREBASE_MESSAGING_SENDER_ID`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_AUTH_DOMAIN`
+- `FIREBASE_STORAGE_BUCKET`
 
-## Custody approval workflow
+Set them under repository Settings → Secrets and variables → Actions → Variables using the Web app configuration from the dedicated inventory Firebase project. These are client configuration identifiers, not Admin SDK credentials.
 
-- New custody cards are created with `approvalStatus: pending`; the asset is reserved as assigned in the same transaction to prevent a second active handover.
-- An active admin/IT-manager can approve a pending card. The approval actor and server timestamp are recorded, and an immutable movement event is added.
-- Rejection requires the card to remain pending and the linked asset to remain assigned. The transaction closes the card, restores the asset to available, records the rejection actor/reason, and writes a movement event.
-- Pending cards cannot be returned or transferred. Legacy cards without an approval field are treated as approved for compatibility.
-- Current approval permission is shared by admin and IT-manager roles; separation-of-duties and office-scoped approvers remain future authorization work.
-
-
-## Printable custody records
-
-The custody register can generate a self-contained Arabic RTL A4 HTML handover form for each card. The form escapes all user-supplied values before embedding them, includes custody and asset identifiers, employee/office details, current approval/return state, a receipt declaration, and signature/approval spaces. The generated HTML is shared as a file so it can be opened in a browser and printed; it is not a signed digital approval or a PDF archive.
-
-
-## CSV import audit
-
-CSV import writes an `import_batches/{batchId}` outcome record containing the initiating UID, source filename, row totals, success/failure counts, and row-level errors. Firestore rules bind `createdBy` to the authenticated actor and make the record append-only. The import itself is sequential; a batch record summarizes the result and does not imply all-or-nothing rollback.
-
-
-## Import batch audit integrity
-
-- Import batch documents are actor-bound to the authenticated administrator and are append-only.
-- Firestore rules require the complete, allowlisted audit schema, typed timestamps and counters, a bounded source filename, and no more than 100 row errors.
-- The rules verify the arithmetic invariants: attempted rows plus skipped invalid rows equal total rows, and successful plus failed rows equal attempted rows.
-- The status must agree with the outcome counters (`completed`, `partial`, or `failed`). Updates and deletes are denied.
-- These controls validate the audit summary; they do not make the CSV import itself an all-or-nothing transaction.
+Until all six values are configured, the deployed site intentionally shows a Firebase setup screen. Native Android/Windows builds require their own FlutterFire platform configuration. This setup does not create a Firebase project, enable services, provision users, or deploy security rules.
