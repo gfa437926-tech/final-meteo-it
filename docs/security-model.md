@@ -67,3 +67,12 @@ The custody register can generate a self-contained Arabic RTL A4 HTML handover f
 ## CSV import audit
 
 CSV import writes an `import_batches/{batchId}` outcome record containing the initiating UID, source filename, row totals, success/failure counts, and row-level errors. Firestore rules bind `createdBy` to the authenticated actor and make the record append-only. The import itself is sequential; a batch record summarizes the result and does not imply all-or-nothing rollback.
+
+
+## Import batch audit integrity
+
+- Import batch documents are actor-bound to the authenticated administrator and are append-only.
+- Firestore rules require the complete, allowlisted audit schema, typed timestamps and counters, a bounded source filename, and no more than 100 row errors.
+- The rules verify the arithmetic invariants: attempted rows plus skipped invalid rows equal total rows, and successful plus failed rows equal attempted rows.
+- The status must agree with the outcome counters (`completed`, `partial`, or `failed`). Updates and deletes are denied.
+- These controls validate the audit summary; they do not make the CSV import itself an all-or-nothing transaction.
