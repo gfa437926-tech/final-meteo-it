@@ -27,6 +27,9 @@
 - Serial values are trimmed and uppercased before indexing and persistence.
 - Existing legacy assets are scanned before new reservations; editing a legacy asset can lazily create its missing serial reservation.
 - Custody assignment, return, transfer, asset office transfer, retirement, and maintenance state changes use Firestore transactions and write movement history.
+- Custody approval requires the authenticated approver UID, a timestamp-valued approval time, an active pending card, and an asset that remains assigned after the transaction.
+- Custody rejection requires an active pending card, typed rejection metadata, and atomic release of the assigned asset.
+- Custody return requires an active approved card and atomic restoration of the asset to available; transfer requires non-empty employee/office values and a matching post-transaction asset office.
 - Maintenance completion reads the persisted ticket and asset state instead of trusting the screen's stale record object.
 
 ## Firestore and Storage controls
