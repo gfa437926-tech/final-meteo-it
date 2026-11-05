@@ -31,7 +31,7 @@
 
 ## Release limitations
 
-This is a baseline for a controlled pilot, not a complete enterprise authorization model. Office-scoped roles, trusted server-side account provisioning, Firebase Emulator rules tests, backups, and production monitoring remain required before wider deployment.
+This is a baseline for development and controlled pre-pilot validation, not a complete enterprise authorization model. Office-scoped roles and trusted server-side account provisioning remain unimplemented. Firestore/Storage Emulator authorization tests now run in CI, but production Firebase configuration/deployment, backup execution and restore drills, and production monitoring remain required before operational use.
 
 
 ## Firestore rule hardening
@@ -39,7 +39,7 @@ This is a baseline for a controlled pilot, not a complete enterprise authorizati
 - The `isAdmin` and `isSuperAdmin` predicates require an active profile as well as the corresponding role.
 - Inventory, office, custody, maintenance, purchase, movement, spare-parts, and parts-usage reads require an active profile.
 - Spare-part stock can be created/updated by active admin/IT-manager accounts; usage events can be created but not edited or deleted by clients.
-- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. Review the latest workflow result before deploying rules.
+- Firestore and Storage Emulator tests are maintained in `test/firestore.rules.test.mjs` and run in a separate GitHub Actions job. The latest verified run (#240, commit `4517e8a`) passed both this job and Flutter analysis/unit tests. Recheck the latest run before any rules deployment.
 
 
 ## File attachment controls
