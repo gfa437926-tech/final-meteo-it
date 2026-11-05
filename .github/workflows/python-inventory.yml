@@ -1,0 +1,31 @@
+name: Python Excel inventory checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python_app/**"
+      - ".github/workflows/python-inventory.yml"
+  pull_request:
+    paths:
+      - "python_app/**"
+      - ".github/workflows/python-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r python_app/requirements.txt
+      - name: Run Excel storage tests
+        working-directory: python_app
+        run: python -m unittest -v
