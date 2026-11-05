@@ -52,3 +52,11 @@ jobs:
           $exe = "python_app/dist/InventoryManager/InventoryManager.exe"
           if (-not (Test-Path $exe)) { throw "EXE was not produced: $exe" }
           Get-Item $exe | Select-Object FullName, Length
+
+      - name: Upload Windows executable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: InventoryManager-Windows-x64
+          path: python_app/dist/InventoryManager/
+          if-no-files-found: error
+          retention-days: 14
