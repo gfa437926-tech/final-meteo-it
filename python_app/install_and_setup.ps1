@@ -3,13 +3,11 @@ $ProgressPreference = 'SilentlyContinue'
 $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 function Step($s) { Write-Host "`n==> $s" -ForegroundColor Cyan }
 function Password($n) {
-  $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%_-'
-  $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+  # Hex output is URL-safe and avoids quoting/connection-string escaping bugs.
   $bytes = New-Object byte[] $n
-  $rng.GetBytes($bytes)
-  $result = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
-  $rng.Dispose()
-  return $result
+  $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $rng.GetBytes($bytes); return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant() }
+  finally { $rng.Dispose() }
 }
 function PsqlPath {
   $cmd = Get-Command psql.exe -ErrorAction SilentlyContinue
@@ -70,9 +68,11 @@ try {
     & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE meteo_inventory OWNER inventory_app'
     if ($LASTEXITCODE -ne 0) { throw 'تعذر إنشاء قاعدة البيانات.' }
   }
-  Step 'تطبيق مخطط الجداول'
-  & $psql -h localhost -p 5432 -U postgres -d meteo_inventory -v ON_ERROR_STOP=1 -f (Join-Path $AppDir 'schema_postgres.sql')
-  if ($LASTEXITCODE -ne 0) { throw 'تعذر إنشاء جداول التطبيق.' }
+  Step 'تطبيق مخطط الجداول بصلاحيات مستخدم التطبيق'
+  $env:PGPASSWORD = $appPassword
+  & $psql -h localhost -p 5432 -U inventory_app -d meteo_inventory -v ON_ERROR_STOP=1 -f (Join-Path $AppDir 'schema_postgres.sql')
+  if ($LASTEXITCODE -ne 0) { throw 'تعذر إنشاء جداول التطبيق بصلاحيات المستخدم المحدود.' }
+  $env:PGPASSWORD = $postgresPassword
   Step 'إعداد اتصال Python'
   @"
 INVENTORY_STORAGE=postgres
