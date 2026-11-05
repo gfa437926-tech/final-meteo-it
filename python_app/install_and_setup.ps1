@@ -30,6 +30,11 @@ try {
   $postgresPassword = Password 36
   $appPassword = Password 36
   $psql = PsqlPath
+  if ($psql) {
+    $secure = Read-Host 'أدخل كلمة مرور مستخدم postgres الحالية' -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { $postgresPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+  }
   if (-not $psql) {
     Step 'تثبيت PostgreSQL 17'
     $override = "--mode unattended --unattendedmodeui none --superpassword $postgresPassword --serverport 5432 --prefix `"$env:ProgramFiles\PostgreSQL\17`" --datadir `"$env:ProgramFiles\PostgreSQL\17\data`""
@@ -73,7 +78,13 @@ try {
 INVENTORY_STORAGE=postgres
 INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/meteo_inventory
 "@ | Set-Content -Path (Join-Path $AppDir '.env') -Encoding ASCII
-  if (-not (Get-Command py.exe -ErrorAction SilentlyContinue)) { throw 'ثبّت Python 3.11 أو أحدث مع Python Launcher ثم أعد المحاولة.' }
+  if (-not (Get-Command py.exe -ErrorAction SilentlyContinue)) {
+    Step 'تنزيل وتثبيت Python 3.12'
+    & winget install --id Python.Python.3.12 --exact --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) { throw 'تعذر تثبيت Python 3.12 عبر winget.' }
+    $env:Path += ";$env:LocalAppData\Programs\Python\Python312;$env:LocalAppData\Programs\Python\Python312\Scripts"
+  }
+  if (-not (Get-Command py.exe -ErrorAction SilentlyContinue)) { throw 'لم يتم العثور على Python Launcher بعد التثبيت. أعد تشغيل المثبّت.' }
   Push-Location $AppDir
   try {
     & py -3 -m venv .venv
@@ -82,12 +93,9 @@ INVENTORY_DATABASE_URL=postgresql://inventory_app:$appPassword@localhost:5432/me
     if ($LASTEXITCODE -ne 0) { throw 'تعذر تحديث pip.' }
     & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
     if ($LASTEXITCODE -ne 0) { throw 'تعذر تثبيت مكتبات Python.' }
-    & .\.venv\Scripts\python.exe -c "import os, psycopg; psycopg.connect(os.environ['INVENTORY_DATABASE_URL']).execute('SELECT 1'); print('DATABASE_OK')" 
-    if ($LASTEXITCODE -ne 0) {
-      $env:INVENTORY_DATABASE_URL = "postgresql://inventory_app:$appPassword@localhost:5432/meteo_inventory"
-      & .\.venv\Scripts\python.exe -c "import psycopg,sys; psycopg.connect(sys.argv[1]).execute('SELECT 1'); print('DATABASE_OK')" $env:INVENTORY_DATABASE_URL
-      if ($LASTEXITCODE -ne 0) { throw 'فشل اختبار اتصال Python بقاعدة البيانات.' }
-    }
+    $env:INVENTORY_DATABASE_URL = "postgresql://inventory_app:$appPassword@localhost:5432/meteo_inventory"
+    & .\.venv\Scripts\python.exe -c "import psycopg,os; psycopg.connect(os.environ['INVENTORY_DATABASE_URL']).execute('SELECT 1'); print('DATABASE_OK')"
+    if ($LASTEXITCODE -ne 0) { throw 'فشل اختبار اتصال Python بقاعدة البيانات.' }
   } finally { Pop-Location }
   Step 'اكتمل الإعداد؛ تشغيل التطبيق'
   Start-Process -FilePath (Join-Path $AppDir '.venv\Scripts\pythonw.exe') -ArgumentList (Join-Path $AppDir 'main.py') -WorkingDirectory $AppDir
