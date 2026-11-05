@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ SCHEMA: dict[str, list[str]] = {
 
 class ExcelStore:
     def __init__(self, path: str | Path | None = None):
-        base = Path(__file__).resolve().parent
+        base = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
         self.path = Path(path) if path else base / "data" / "inventory.xlsx"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
