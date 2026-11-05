@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/models/office.dart';
+import 'package:metra_it_assets/services/office_repository.dart';
 import 'package:metra_it_assets/services/asset_repository.dart';
 
 class AssetFormScreen extends StatefulWidget {
@@ -12,6 +14,9 @@ class AssetFormScreen extends StatefulWidget {
 class _AssetFormScreenState extends State<AssetFormScreen> {
   final formKey = GlobalKey<FormState>();
   final repository = AssetRepository();
+  final officeRepository = OfficeRepository();
+  String? officeId;
+  String? officeName;
   AssetCategory category = AssetCategory.laptop;
   AssetStatus status = AssetStatus.available;
   final brand = TextEditingController(), model = TextEditingController(), serial = TextEditingController();
@@ -31,6 +36,8 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
       cpu.text = a.cpu ?? '';
       ram.text = a.ram ?? '';
       storage.text = a.storage ?? '';
+      officeId = a.officeId;
+      officeName = a.officeName;
     }
   }
   @override
@@ -41,7 +48,8 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
     setState(() => saving = true);
     final asset = Asset(id: widget.initialAsset?.id ?? const Uuid().v4(), category: category, brand: brand.text,
       model: model.text, serialNumber: serial.text, status: status,
-      cpu: cpu.text, ram: ram.text, storage: storage.text);
+      cpu: cpu.text, ram: ram.text, storage: storage.text,
+      officeId: officeId, officeName: officeName);
     try {
       if (widget.initialAsset == null) { await repository.createAsset(asset); } else { await repository.updateAsset(asset); }
       if (!mounted) return;
@@ -65,6 +73,46 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
         _field(brand, 'الشركة المصنعة', required: true),
         _field(model, 'الموديل', required: true),
         _field(serial, 'الرقم التسلسلي'),
+        const SizedBox(height: 14),
+        StreamBuilder<List<Office>>(
+          stream: officeRepository.watchOffices(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Text('تعذر تحميل قائمة المكاتب');
+            }
+            if (!snapshot.hasData) {
+              return const LinearProgressIndicator();
+            }
+            final offices = snapshot.data!
+                .where((office) => office.isActive || office.id == officeId)
+                .toList();
+            return DropdownButtonFormField<String>(
+              initialValue: officeId ?? '',
+              decoration: const InputDecoration(
+                labelText: 'المكتب الحالي',
+                helperText: 'يمكن إسناد الأصل إلى مكتب الآن أو لاحقاً',
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: '',
+                  child: Text('غير محدد'),
+                ),
+                ...offices.map((office) => DropdownMenuItem<String>(
+                  value: office.id,
+                  child: Text(office.isActive ? office.name : '${office.name} (متوقف)'),
+                )),
+              ],
+              onChanged: (value) {
+                final selected = offices.where((office) => office.id == value);
+                setState(() {
+                  officeId = value == null || value.isEmpty ? null : value;
+                  officeName = selected.isEmpty ? null : selected.first.name;
+                });
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 14),
         DropdownButtonFormField<AssetStatus>(initialValue: status, decoration: const InputDecoration(labelText: 'حالة الجهاز'),
           items: AssetStatus.values.map((e)=>DropdownMenuItem(value:e,child:Text(e.label))).toList(), onChanged: (v)=>setState(()=>status=v!)),
         if (category == AssetCategory.laptop || category == AssetCategory.desktop) ...[
