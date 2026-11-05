@@ -279,6 +279,7 @@ class InventoryApp(tk.Tk):
             messagebox.showerror("تعذر الحذف", str(exc))
 
     def _reload_current(self):
+        self._refresh_dashboard()
         tab_index = self.tabs.index(self.tabs.select())
         frame = self.tabs.nametowidget(self.tabs.tabs()[tab_index])
         # Refresh the tree belonging to the selected tab.
@@ -287,7 +288,6 @@ class InventoryApp(tk.Tk):
                 sheet = next((s for s, (title, _) in LABELS.items() if title == self.tabs.tab(tab_index, "text")), None)
                 if sheet:
                     self._refresh(sheet, child, LABELS[sheet][1])
-                self._refresh_dashboard()
                 return
 
 if __name__ == "__main__":
