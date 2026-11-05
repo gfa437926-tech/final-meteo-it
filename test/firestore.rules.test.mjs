@@ -7,6 +7,7 @@ import {
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
 import {
+  deleteDoc,
   doc,
   getDoc,
   runTransaction,
