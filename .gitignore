@@ -13,3 +13,10 @@ lib/firebase_options.dart
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 .env
+
+# Python inventory app
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+python_app/data/
