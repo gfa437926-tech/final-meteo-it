@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from storage_factory import create_store
 from export_tools import export_workbook
 from import_tools import import_workbook
+from backup_tools import create_backup, suggested_backup_name
 
 def filter_rows(rows, query: str):
     """Return rows containing the case-insensitive query in any field."""
@@ -82,6 +83,7 @@ class InventoryApp(tk.Tk):
         ttk.Button(actions, text="تحديث الإحصاءات", command=self._refresh_dashboard).pack(side="right", padx=5)
         ttk.Button(actions, text="تصدير نسخة Excel", command=self._export_excel).pack(side="right", padx=5)
         ttk.Button(actions, text="استيراد من Excel", command=self._import_excel).pack(side="right", padx=5)
+        ttk.Button(actions, text="نسخة احتياطية", command=self._backup_database).pack(side="right", padx=5)
 
     def _refresh_dashboard(self):
         for sheet, label in self.dashboard_labels.items():
@@ -104,6 +106,23 @@ class InventoryApp(tk.Tk):
             messagebox.showinfo("اكتمل التصدير", f"تم تصدير جميع الأقسام إلى:\n{destination}")
         except Exception as exc:
             messagebox.showerror("فشل التصدير", str(exc))
+
+    def _backup_database(self):
+        is_excel = getattr(self.store, "path", None) is not None
+        extension = ".xlsx" if is_excel else ".dump"
+        destination = filedialog.asksaveasfilename(
+            title="حفظ نسخة احتياطية من قاعدة البيانات",
+            defaultextension=extension,
+            filetypes=[("Excel Backup", "*.xlsx")] if is_excel else [("PostgreSQL Backup", "*.dump")],
+            initialfile=suggested_backup_name(extension),
+        )
+        if not destination:
+            return
+        try:
+            backup_path = create_backup(self.store, destination)
+            messagebox.showinfo("اكتملت النسخة الاحتياطية", f"تم حفظ النسخة في:\n{backup_path}")
+        except Exception as exc:
+            messagebox.showerror("فشل النسخ الاحتياطي", str(exc))
 
     def _import_excel(self):
         source = filedialog.askopenfilename(
@@ -240,7 +259,7 @@ class InventoryApp(tk.Tk):
         win, entries = self._form("تعديل — " + LABELS[sheet][0], fields, row, sheet=sheet)
         def save():
             try:
-                self.store.update_row(sheet, rid, {k: e.get().strip() for k, e in entries.items()})
+                self.store.update_row(sheet, rid, self._collect_form(sheet, entries))
                 win.destroy()
                 self._reload_current()
                 messagebox.showinfo("تم", "تم تحديث السجل.")
