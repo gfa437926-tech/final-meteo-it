@@ -17,7 +17,8 @@
 - [x] GitHub Actions workflow and model tests
 
 ## Remaining before operational pilot
-- [x] Verify Flutter analyze/tests and Firestore/Storage Emulator authorization CI on commit `d7f2f7f` (workflow run `41935041019`; Android/Windows/Web release builds are tracked separately)
+- [x] Verify Flutter analyze/tests and Firestore/Storage Emulator authorization CI on commit `4517e8a` (workflow run `41936741188`; both jobs passed; Android/Windows/Web release builds are tracked separately)
+- [x] Enforce user-profile allowed-field and value-type validation in Firestore rules, with Emulator tests for self-profile edits and admin profile updates
 - [ ] Configure dedicated Firebase project, FlutterFire platform files, and deploy Firestore/Storage rules
 - [x] Add email/password sign-in and gate dashboard access by active admin/IT-manager profile
 - [x] Add super-admin user profile management for existing Firebase Authentication accounts (admin/IT-manager roles)
