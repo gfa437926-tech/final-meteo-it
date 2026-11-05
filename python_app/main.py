@@ -10,6 +10,7 @@ from excel_store import SCHEMA
 from dotenv import load_dotenv
 from storage_factory import create_store
 from export_tools import export_workbook
+from import_tools import import_workbook
 
 def filter_rows(rows, query: str):
     """Return rows containing the case-insensitive query in any field."""
@@ -80,6 +81,7 @@ class InventoryApp(tk.Tk):
         actions.pack(fill="x", pady=18)
         ttk.Button(actions, text="تحديث الإحصاءات", command=self._refresh_dashboard).pack(side="right", padx=5)
         ttk.Button(actions, text="تصدير نسخة Excel", command=self._export_excel).pack(side="right", padx=5)
+        ttk.Button(actions, text="استيراد من Excel", command=self._import_excel).pack(side="right", padx=5)
 
     def _refresh_dashboard(self):
         for sheet, label in self.dashboard_labels.items():
@@ -102,6 +104,29 @@ class InventoryApp(tk.Tk):
             messagebox.showinfo("اكتمل التصدير", f"تم تصدير جميع الأقسام إلى:\n{destination}")
         except Exception as exc:
             messagebox.showerror("فشل التصدير", str(exc))
+
+    def _import_excel(self):
+        source = filedialog.askopenfilename(
+            title="اختيار ملف Excel للاستيراد",
+            filetypes=[("Excel Workbook", "*.xlsx")],
+        )
+        if not source:
+            return
+        if not messagebox.askyesno(
+            "تأكيد الاستيراد",
+            "سيتم إضافة السجلات الجديدة فقط. لن تُستبدل السجلات الموجودة، وسيتم تجاهل المكرر وسجل العمليات. هل تريد المتابعة؟",
+        ):
+            return
+        try:
+            result = import_workbook(self.store, source)
+            self._refresh_dashboard()
+            self._reload_current()
+            messagebox.showinfo(
+                "اكتمل الاستيراد",
+                f"السجلات المضافة: {result['imported']}\nالسجلات المتجاوزة/المكررة: {result['skipped']}",
+            )
+        except Exception as exc:
+            messagebox.showerror("فشل الاستيراد", str(exc))
 
     def _build_table(self, parent, sheet, fields):
         bar = ttk.Frame(parent, padding=8)
