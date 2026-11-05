@@ -84,6 +84,6 @@ flutterfire configure
 
 ## بوابة الجاهزية
 
-آخر تحقق CI موثق على الفرع `main` هو التشغيل [#251](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41947912340)، وقد نجح فيه Flutter analyze وFlutter tests واختبارات Firestore/Storage Emulator. كما نجح سير نشر GitHub Pages في البناء والنشر [#1](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41947912379). نجاح CI والنشر يثبت اجتياز الفحوص الآلية ووصول ملفات الويب فقط، ولا يعني أن Firebase الإنتاجي مضبوط أو أن التطبيق جاهز للتشغيل الفعلي.
+آخر تحقق مكتمل وناجح قبل تحديث توثيق الأمان هو CI [#255](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41949610731) (تحليل Flutter والاختبارات واختبارات قواعد Firestore/Storage) ونشر Pages [#5](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41949611022) (البناء والنشر). بعد تحديث توثيق الأمان في commit `40a7d71` بدأ CI [#256](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41950005972) ونشر Pages [#6](https://github.com/gfa437926-tech/final-meteo-it/actions/runs/41950006004)، ويجب مراجعة نتيجتيهما قبل اعتماد هذا التحديث نهائياً. نجاح CI والنشر يثبت اجتياز الفحوص الآلية ووصول ملفات الويب فقط، ولا يعني أن Firebase الإنتاجي مضبوط أو أن التطبيق جاهز للتشغيل الفعلي.
 
 **لا تستخدم بيانات تشغيلية حقيقية قبل إكمال إعداد Firebase المخصص، ومراجعة الصلاحيات، وتجارب الاستعادة، وبناء واختبار التطبيقات على الأجهزة المستهدفة.**
