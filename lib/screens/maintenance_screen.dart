@@ -21,12 +21,12 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
       builder: (ctx, setDialog) => AlertDialog(
         title: const Text('فتح طلب صيانة'),
         content: SizedBox(width: 480, child: Form(key: form, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
             stream: AssetRepository().watchAssetDocuments(
               statuses: ['available', 'damaged', 'returned'],
             ),
             builder: (ctx, snap) {
-              final docs = snap.data?.docs ?? [];
+              final docs = snap.data ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
               return DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'الجهاز'),
                 items: docs.map((d) { final m=d.data(); return DropdownMenuItem(value:d.id, child:Text('${m['brand'] ?? ''} ${m['model'] ?? ''} • ${m['serialNumber'] ?? ''}')); }).toList(),
