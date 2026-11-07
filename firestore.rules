@@ -195,6 +195,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /asset_movements/{movementId} {
+      allow read: if isSuperAdmin() ||
+        (resource.data.keys().hasAny(['officeId']) &&
+         hasOfficeAccess(resource.data.officeId));
+      allow create: if isSuperAdmin() ||
+        (request.resource.data.keys().hasAny(['officeId']) &&
+         hasOfficeAccess(request.resource.data.officeId) &&
+         (!request.resource.data.keys().hasAny(['fromOfficeId']) ||
+           hasOfficeAccess(request.resource.data.fromOfficeId)) &&
+         (!request.resource.data.keys().hasAny(['toOfficeId']) ||
+           hasOfficeAccess(request.resource.data.toOfficeId)));
+      allow update, delete: if false;
+    }
+
     match /custody_cards/{cardId} {
       allow read: if isActiveUser();
       allow create: if isAdmin() &&
