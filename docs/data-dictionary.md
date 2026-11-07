@@ -69,7 +69,7 @@ Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`,
 
 
 ## asset_documents
-`assetId, purchaseRecordId?, fileName, documentType, storagePath, contentType, sizeBytes, uploadedBy, createdAt`
+`assetId, officeId, purchaseRecordId?, fileName, documentType, storagePath, contentType, sizeBytes, uploadedBy, createdAt`
 
 Supported document types: `invoice`, `warranty`, `handover`, `maintenance`, `photo`, and `other`. File bytes are stored in Firebase Storage; the Firestore record stores metadata and a private storage path.
 
@@ -82,5 +82,5 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 ## Authorization rollout notes
 
 - `custody_cards`, `asset_documents` metadata, and `maintenance_parts` usage records are authorized through their `assetId` and the linked asset's `officeId`.
-- Firebase Storage paths use `asset_documents/{assetId}/{fileName}`; Storage rules resolve the Firestore asset before allowing reads or uploads.
+- `asset_documents` metadata must carry the same `officeId` as its linked asset. Firebase Storage paths use `asset_documents/{assetId}/{fileName}`; Storage rules resolve the Firestore asset and its active office before allowing manager reads or uploads.
 - `maintenance_records` and `purchase_records` do not yet have client rules in this office-scoping phase. They remain unavailable to clients until a reviewed office/asset relationship and tests are added.
