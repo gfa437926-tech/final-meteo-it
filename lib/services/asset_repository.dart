@@ -65,6 +65,49 @@ class AssetRepository {
     });
   }
 
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      watchMovementDocuments() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return Stream.value(
+        const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+      );
+    }
+    return Stream.fromFuture(_db.collection('users').doc(uid).get())
+        .asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) {
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
+      }
+      Query<Map<String, dynamic>> query = _db.collection('asset_movements');
+      if (data['role'] != 'admin') {
+        final rawOfficeIds = data['officeIds'];
+        final officeIds = rawOfficeIds is List
+            ? rawOfficeIds.whereType<String>().toSet().toList()
+            : <String>[];
+        if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+          return Stream.value(
+            const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          );
+        }
+        query = query.where('officeId', whereIn: officeIds);
+      }
+      return query.snapshots().map((snapshot) {
+        final documents = snapshot.docs.toList()
+          ..sort((a, b) {
+            final aTime = a.data()['occurredAt'];
+            final bTime = b.data()['occurredAt'];
+            final aDate = aTime is Timestamp ? aTime.toDate() : DateTime(2000);
+            final bDate = bTime is Timestamp ? bTime.toDate() : DateTime(2000);
+            return bDate.compareTo(aDate);
+          });
+        return documents.take(5).toList();
+      });
+    });
+  }
+
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _filterAssetDocuments(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> documents, {
     String? status,
