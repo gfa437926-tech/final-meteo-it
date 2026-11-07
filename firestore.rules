@@ -11,11 +11,45 @@ service cloud.firestore {
     function isActiveUser() {
       return userExists() && userDoc().isActive == true;
     }
+    // Retain the existing application-level role helper for non-office
+    // workflows; office authorization is always checked separately below.
     function isAdmin() {
       return isActiveUser() && userDoc().role in ['admin', 'it_manager'];
     }
     function isSuperAdmin() {
       return isActiveUser() && userDoc().role == 'admin';
+    }
+    function assignedOfficeIds() {
+      return userDoc().get('officeIds', []);
+    }
+    function hasOfficeAccess(officeId) {
+      return isSuperAdmin() ||
+        (isActiveUser() &&
+         userDoc().role == 'it_manager' &&
+         officeId is string &&
+         assignedOfficeIds() is list &&
+         assignedOfficeIds().hasAny([officeId]));
+    }
+    function canReadAsset(data) {
+      return isSuperAdmin() ||
+        (data.keys().hasAny(['officeId']) &&
+         data.officeId is string &&
+         hasOfficeAccess(data.officeId));
+    }
+    function canWriteAsset(data) {
+      return isSuperAdmin() ||
+        (data.keys().hasAny(['officeId']) &&
+         data.officeId is string &&
+         hasOfficeAccess(data.officeId) &&
+         exists(/databases/$(database)/documents/offices/$(data.officeId)) &&
+         get(/databases/$(database)/documents/offices/$(data.officeId)).data.isActive == true);
+    }
+    function validOfficeAssignment(data) {
+      return data.keys().hasAny(['officeIds']) &&
+        data.officeIds is list &&
+        data.officeIds.size() <= 20 &&
+        ((data.role == 'admin' && data.officeIds.size() == 0) ||
+         (data.role == 'it_manager' && data.officeIds.size() >= 1));
     }
 
     function custodyUpdateAllowed() {
@@ -71,31 +105,36 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
       allow create: if isSuperAdmin() && request.auth.uid != uid &&
         request.resource.data.keys().hasOnly([
-          'displayName', 'email', 'role', 'isActive', 'createdAt', 'updatedAt'
+          'displayName', 'email', 'role', 'isActive', 'officeIds',
+          'createdAt', 'updatedAt'
         ]) &&
         request.resource.data.keys().hasAll([
-          'displayName', 'email', 'role', 'isActive', 'createdAt'
+          'displayName', 'email', 'role', 'isActive', 'officeIds', 'createdAt'
         ]) &&
         request.resource.data.displayName is string &&
         request.resource.data.email is string &&
         request.resource.data.role in ['admin', 'it_manager'] &&
         request.resource.data.isActive is bool &&
         request.resource.data.createdAt is timestamp &&
+        validOfficeAssignment(request.resource.data) &&
         (!request.resource.data.keys().hasAny(['updatedAt']) ||
           request.resource.data.updatedAt is timestamp);
-      allow update: if (isSuperAdmin() && request.auth.uid != uid &&
+      allow update: if (
+          isSuperAdmin() && request.auth.uid != uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'email', 'role', 'isActive', 'updatedAt']) &&
+            .hasOnly(['displayName', 'email', 'role', 'isActive', 'officeIds', 'updatedAt']) &&
           request.resource.data.role in ['admin', 'it_manager'] &&
           request.resource.data.isActive is bool &&
           request.resource.data.displayName is string &&
           request.resource.data.email is string &&
+          validOfficeAssignment(request.resource.data) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
-            request.resource.data.updatedAt is timestamp)) ||
-        (isActiveUser() && request.auth.uid == uid &&
+            request.resource.data.updatedAt is timestamp)
+        ) || (
+          isActiveUser() && request.auth.uid == uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['displayName', 'email', 'updatedAt']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName']) ||
@@ -103,9 +142,11 @@ service cloud.firestore {
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) ||
             request.resource.data.email is string) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
-            request.resource.data.updatedAt is timestamp));
+            request.resource.data.updatedAt is timestamp)
+        );
       allow delete: if false;
     }
+
     function validOffice(data, officeId) {
       return data.keys().hasOnly([
           'id', 'name', 'building', 'directorate', 'department',
@@ -125,19 +166,35 @@ service cloud.firestore {
     }
 
     match /offices/{officeId} {
-      allow read: if isActiveUser();
-      allow create, update: if isAdmin() && validOffice(request.resource.data, officeId);
+      // A manager can see only offices explicitly assigned by a super admin.
+      allow read: if hasOfficeAccess(officeId);
+      // Office catalogue and lifecycle are centrally administered.
+      allow create, update: if isSuperAdmin() &&
+        validOffice(request.resource.data, officeId);
       allow delete: if false;
     }
+
     match /assets/{assetId} {
-      allow read: if isActiveUser();
-      allow create, update: if isAdmin();
+      // Documents with no officeId are legacy/unassigned and admin-only.
+      allow read: if canReadAsset(resource.data);
+      allow create: if canWriteAsset(request.resource.data);
+      // Updates must be authorized at both ends; this enforces source and
+      // destination access for cross-office transfers.
+      allow update: if canWriteAsset(resource.data) &&
+        canWriteAsset(request.resource.data);
       allow delete: if false;
     }
+
     match /asset_serials/{serialId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isSuperAdmin() ||
+        (resource.data.keys().hasAny(['officeId']) &&
+         hasOfficeAccess(resource.data.officeId));
+      allow create: if canWriteAsset(request.resource.data);
+      allow update: if canWriteAsset(resource.data) &&
+        canWriteAsset(request.resource.data);
+      allow delete: if false;
     }
+
     match /custody_cards/{cardId} {
       allow read: if isActiveUser();
       allow create: if isAdmin() &&
@@ -147,16 +204,19 @@ service cloud.firestore {
       allow update: if custodyUpdateAllowed();
       allow delete: if false;
     }
+
     match /asset_documents/{documentId} {
       allow read: if isActiveUser();
       allow create: if isAdmin();
       allow update, delete: if false;
     }
+
     match /maintenance_parts/{usageId} {
       allow read: if isActiveUser();
       allow create: if isAdmin();
       allow update, delete: if false;
     }
+
     function validImportBatch(data) {
       return data.keys().hasOnly([
           'sourceName', 'createdBy', 'createdAt', 'completedAt',
@@ -204,17 +264,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Only non-sensitive shared lookup catalogues remain on the generic
+    // path. Office-bearing and transactional collections are intentionally
+    // excluded until their own asset-to-office linkage is secured.
     match /{collection}/{document=**} {
-      allow read: if isActiveUser() && collection in [
-        'asset_categories', 'asset_models', 'custody_items',
-        'asset_movements', 'maintenance_records',
-        'purchase_records', 'spare_parts', 'maintenance_parts'
-      ];
-      allow create, update: if isAdmin() && collection in [
-        'asset_categories', 'asset_models', 'custody_items',
-        'asset_movements', 'maintenance_records',
-        'purchase_records'
-      ];
+      allow read: if isActiveUser() &&
+        collection in ['asset_categories', 'asset_models', 'custody_items'];
+      allow create, update: if isAdmin() &&
+        collection in ['asset_categories', 'asset_models', 'custody_items'];
       allow delete: if false;
     }
   }
