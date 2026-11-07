@@ -42,10 +42,10 @@
 ## Firestore and Storage controls
 
 - Administrative predicates require an authenticated user with an active profile and an allowed role.
-- Office and asset reads are office-scoped in Firestore. An asset without `officeId` is legacy/unassigned and is visible only to the global administrator.
-- Asset creates and updates require an active assigned office for IT managers. An update must be authorized for both the old and new office; a transfer therefore requires access to both offices.
+- Office and asset reads are office-scoped in Firestore. IT-manager queries are constrained to assigned, active offices before assets are fetched. Deactivating an office revokes manager access to its office record, assets, movements, and Storage attachments. An asset without `officeId` is legacy/unassigned and is visible only to the global administrator.
+- Asset creates and updates require a real active office. IT managers must be assigned to that office; an update must be authorized for both the old and new office. The global administrator can move a legacy or inactive-office asset into an active office.
 - Office catalogue creation and updates are restricted to the global administrator; office deletion remains disabled.
-- Serial indexes, movement records, custody cards, Firestore attachment metadata, and maintenance-part usage are linked to the asset office. Storage reads/uploads resolve the asset document and enforce the same office check.
+- Serial indexes, movement records, custody cards, Firestore attachment metadata, and maintenance-part usage are linked to the asset office. Attachment metadata must match the linked asset's office. Storage reads/uploads resolve the asset document and enforce the same active-office check.
 - Spare-parts stock is scoped by its own `officeId`; records without an office remain admin-only. Shared lookup catalogues remain available to active users.
 - Import batch audit records are actor-bound, schema-validated, bounded to 100 rows, and append-only; this audit area remains role-based rather than office-scoped.
 - Emulator tests cover authentication/profile gates, office A/B isolation, scoped queries, dual-office transfer, custody/document metadata, Storage access, role elevation, and import audit validation.
