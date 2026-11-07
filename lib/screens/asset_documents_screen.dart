@@ -161,10 +161,8 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                     }).toList(),
                     onChanged: (value) => setState(() {
                       selectedAssetId = value;
-                      selectedAssetOfficeId = assets
-                          .where((asset) => asset.id == value)
-                          .firstOrNull
-                          ?.officeId;
+                      final selected = assets.where((asset) => asset.id == value).toList();
+                      selectedAssetOfficeId = selected.isEmpty ? null : selected.first.officeId;
                       purchaseRecordId = null;
                     }),
                   );
@@ -232,12 +230,13 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
             Expanded(
               child: selectedAssetId == null
                   ? const Center(child: Text('اختر أصلاً لعرض مستنداته'))
-                  : selectedAssetOfficeId == null
-                      ? const Center(child: Text('لا توجد مستندات مكتبية لهذا الأصل حتى الآن'))
-                      : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('asset_documents')
-                          .where('officeId', isEqualTo: selectedAssetOfficeId)
+                          .where(
+                            selectedAssetOfficeId == null ? 'assetId' : 'officeId',
+                            isEqualTo: selectedAssetOfficeId ?? selectedAssetId,
+                          )
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) return Center(child: Text('تعذر تحميل المستندات: ${snapshot.error}'));
