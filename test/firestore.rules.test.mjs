@@ -591,4 +591,10 @@ test('custody cards and Firestore attachment metadata follow the linked asset of
   await assertFails(getDoc(doc(managerB, 'asset_documents', 'document-a')));
   await assertFails(getDoc(doc(managerA, 'asset_documents', 'document-mismatch')));
   await assertFails(getDoc(doc(managerB, 'asset_documents', 'document-mismatch')));
+  await assertFails(setDoc(doc(managerA, 'asset_documents', 'forged-office'), {
+    assetId: 'asset-1',
+    officeId: 'office-b',
+    fileName: 'forged.pdf',
+    storagePath: 'asset_documents/asset-1/forged.pdf',
+  }));
 });
