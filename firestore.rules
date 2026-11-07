@@ -22,11 +22,16 @@ service cloud.firestore {
     function assignedOfficeIds() {
       return userDoc().get('officeIds', []);
     }
+    function officeIsActive(officeId) {
+      return officeId is string &&
+        exists(/databases/$(database)/documents/offices/$(officeId)) &&
+        get(/databases/$(database)/documents/offices/$(officeId)).data.isActive == true;
+    }
     function hasOfficeAccess(officeId) {
       return isSuperAdmin() ||
         (isActiveUser() &&
          userDoc().role == 'it_manager' &&
-         officeId is string &&
+         officeIsActive(officeId) &&
          assignedOfficeIds() is list &&
          assignedOfficeIds().hasAny([officeId]));
     }
@@ -37,12 +42,12 @@ service cloud.firestore {
          hasOfficeAccess(data.officeId));
     }
     function canWriteAsset(data) {
-      return isSuperAdmin() ||
-        (data.keys().hasAny(['officeId']) &&
-         data.officeId is string &&
-         hasOfficeAccess(data.officeId) &&
-         exists(/databases/$(database)/documents/offices/$(data.officeId)) &&
-         get(/databases/$(database)/documents/offices/$(data.officeId)).data.isActive == true);
+      // Even a global administrator must place new/updated assets in a real,
+      // active office. Admins can still move legacy assets into such an office.
+      return data.keys().hasAny(['officeId']) &&
+        data.officeId is string &&
+        officeIsActive(data.officeId) &&
+        hasOfficeAccess(data.officeId);
     }
     function canAccessAssetId(assetId) {
       return assetId is string &&
@@ -214,8 +219,8 @@ service cloud.firestore {
       allow create: if canWriteAsset(request.resource.data);
       // Updates must be authorized at both ends; this enforces source and
       // destination access for cross-office transfers.
-      allow update: if canWriteAsset(resource.data) &&
-        canWriteAsset(request.resource.data);
+      allow update: if (isSuperAdmin() && canWriteAsset(request.resource.data)) ||
+        (canWriteAsset(resource.data) && canWriteAsset(request.resource.data));
       allow delete: if false;
     }
 
