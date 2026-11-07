@@ -280,6 +280,44 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    function linkedAssetOffice(assetId, officeId) {
+      return assetId is string && officeId is string &&
+        exists(/databases/$(database)/documents/assets/$(assetId)) &&
+        get(/databases/$(database)/documents/assets/$(assetId)).data.officeId == officeId &&
+        canAccessAssetId(assetId);
+    }
+    match /maintenance_records/{recordId} {
+      allow read: if isSuperAdmin() ||
+        (resource.data.keys().hasAll(['assetId', 'officeId']) &&
+         linkedAssetOffice(resource.data.assetId, resource.data.officeId));
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
+        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
+        request.resource.data.status == 'open';
+      allow update: if isAdmin() &&
+        resource.data.keys().hasAll(['assetId', 'officeId']) &&
+        linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
+        request.resource.data.assetId == resource.data.assetId &&
+        request.resource.data.officeId == resource.data.officeId &&
+        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
+      allow delete: if false;
+    }
+    match /purchase_records/{recordId} {
+      allow read: if isSuperAdmin() ||
+        (resource.data.keys().hasAll(['assetId', 'officeId']) &&
+         linkedAssetOffice(resource.data.assetId, resource.data.officeId));
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
+        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
+      allow update: if isAdmin() &&
+        resource.data.keys().hasAll(['assetId', 'officeId']) &&
+        linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
+        request.resource.data.assetId == resource.data.assetId &&
+        request.resource.data.officeId == resource.data.officeId &&
+        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
+      allow delete: if false;
+    }
+
     match /maintenance_parts/{usageId} {
       allow read: if canAccessAssetId(resource.data.assetId);
       allow create: if isAdmin() &&
