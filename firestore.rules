@@ -257,9 +257,16 @@ service cloud.firestore {
     }
 
     match /asset_documents/{documentId} {
-      allow read: if canAccessAssetId(resource.data.assetId);
-      allow create: if isAdmin() &&
-        canAccessAssetId(request.resource.data.assetId);
+      allow read: if isSuperAdmin() ||
+        (resource.data.officeId is string &&
+         hasOfficeAccess(resource.data.officeId));
+      allow create: if isSuperAdmin() ||
+        (isAdmin() &&
+         request.resource.data.officeId is string &&
+         hasOfficeAccess(request.resource.data.officeId) &&
+         canAccessAssetId(request.resource.data.assetId) &&
+         get(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeId ==
+           request.resource.data.officeId);
       allow update, delete: if false;
     }
 
