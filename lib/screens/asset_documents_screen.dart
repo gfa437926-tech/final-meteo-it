@@ -5,6 +5,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
+import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
 
 class AssetDocumentsScreen extends StatefulWidget {
   const AssetDocumentsScreen({super.key});
@@ -15,6 +17,8 @@ class AssetDocumentsScreen extends StatefulWidget {
 
 class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
   String? selectedAssetId;
+  String? selectedAssetOfficeId;
+  final assetRepository = AssetRepository();
   String documentType = 'other';
   String? purchaseRecordId;
   bool uploading = false;
@@ -68,6 +72,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
       );
       await FirebaseFirestore.instance.collection('asset_documents').doc(documentId).set({
         'assetId': selectedAssetId,
+        'officeId': selectedAssetOfficeId,
         'fileName': file.name,
         'storagePath': path,
         'contentType': _contentType(extension),
@@ -122,18 +127,21 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance.collection('assets').orderBy('brand').snapshots(),
+              child: StreamBuilder<List<Asset>>(
+                stream: assetRepository.watchAssets(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) return Text('تعذر تحميل الأصول: ${snapshot.error}');
                   if (!snapshot.hasData) return const LinearProgressIndicator();
-                  final assets = snapshot.data!.docs;
-                  if (assets.isEmpty) return const Text('أضف أصلاً أولاً قبل إرفاق المستندات');
+                  final assets = snapshot.data!;
+                  if (assets.isEmpty) return const Text('لا توجد أصول ضمن المكاتب المصرح بها');
                   if (!assets.any((asset) => asset.id == selectedAssetId)) {
-                    final firstAssetId = assets.first.id;
+                    final firstAsset = assets.first;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted && selectedAssetId != firstAssetId) {
-                        setState(() => selectedAssetId = firstAssetId);
+                      if (mounted && selectedAssetId != firstAsset.id) {
+                        setState(() {
+                          selectedAssetId = firstAsset.id;
+                          selectedAssetOfficeId = firstAsset.officeId;
+                        });
                       }
                     });
                   }
@@ -144,8 +152,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                       prefixIcon: Icon(Icons.devices_other),
                     ),
                     items: assets.map((asset) {
-                      final data = asset.data();
-                      final label = '${data['brand'] ?? ''} ${data['model'] ?? ''}'.trim();
+                      final label = '${asset.brand} ${asset.model}'.trim();
                       return DropdownMenuItem(
                         value: asset.id,
                         child: Text(label.isEmpty ? asset.id : label,
@@ -154,6 +161,10 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                     }).toList(),
                     onChanged: (value) => setState(() {
                       selectedAssetId = value;
+                      selectedAssetOfficeId = assets
+                          .where((asset) => asset.id == value)
+                          .firstOrNull
+                          ?.officeId;
                       purchaseRecordId = null;
                     }),
                   );
@@ -221,15 +232,19 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
             Expanded(
               child: selectedAssetId == null
                   ? const Center(child: Text('اختر أصلاً لعرض مستنداته'))
-                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  : selectedAssetOfficeId == null
+                      ? const Center(child: Text('لا توجد مستندات مكتبية لهذا الأصل حتى الآن'))
+                      : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('asset_documents')
-                          .where('assetId', isEqualTo: selectedAssetId)
+                          .where('officeId', isEqualTo: selectedAssetOfficeId)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) return Center(child: Text('تعذر تحميل المستندات: ${snapshot.error}'));
                         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                        final docs = snapshot.data!.docs.toList()
+                        final docs = snapshot.data!.docs
+                            .where((doc) => doc.data()['assetId'] == selectedAssetId)
+                            .toList()
                           ..sort((a, b) {
                             final ad = a.data()['createdAt'];
                             final bd = b.data()['createdAt'];
