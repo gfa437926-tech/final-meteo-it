@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:metra_it_assets/services/custody_repository.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class CustodyScreen extends StatefulWidget {
@@ -47,10 +48,7 @@ class _CustodyScreenState extends State<CustodyScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('assets')
-                      .where('status', isEqualTo: 'available')
-                      .snapshots(),
+                  stream: AssetRepository().watchAssetDocuments(status: 'available'),
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
                     return DropdownButtonFormField<String>(
