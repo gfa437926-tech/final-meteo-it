@@ -10,6 +10,10 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
   runTransaction,
   setDoc,
   updateDoc,
@@ -513,4 +517,43 @@ test('storage reads and uploads are authorized through the linked asset office',
     { contentType: 'application/pdf' },
   ));
   await assertFails(getBytes(storageRef(managerA, 'asset_documents/missing-asset/no-link.pdf')));
+});
+
+
+test('office-scoped asset queries must prove the manager office constraint', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const scoped = query(
+    collection(managerA, 'assets'),
+    where('officeId', '==', 'office-a'),
+  );
+  await assertSucceeds(getDocs(scoped));
+  await assertFails(getDocs(collection(managerA, 'assets')));
+});
+
+test('a transfer requires access to both the source and destination offices', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  await assertFails(updateDoc(doc(managerA, 'assets', 'asset-1'), {
+    officeId: 'office-b',
+    officeName: 'Office B',
+  }));
+
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await assertSucceeds(updateDoc(doc(admin, 'users', 'manager-1'), {
+    officeIds: ['office-a', 'office-b'],
+  }));
+  const managerBoth = env.authenticatedContext('manager-1').firestore();
+  await assertSucceeds(runTransaction(managerBoth, async (tx) => {
+    tx.update(doc(managerBoth, 'assets', 'asset-1'), {
+      officeId: 'office-b',
+      officeName: 'Office B',
+    });
+    tx.set(doc(managerBoth, 'asset_movements', 'move-a-to-b'), {
+      assetId: 'asset-1',
+      officeId: 'office-b',
+      fromOfficeId: 'office-a',
+      toOfficeId: 'office-b',
+      movementType: 'transferred',
+      occurredAt: new Date(),
+    });
+  }));
 });
