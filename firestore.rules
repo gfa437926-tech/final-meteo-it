@@ -328,7 +328,7 @@ service cloud.firestore {
       allow read: if isActiveUser() &&
         collection in ['asset_categories', 'asset_models'];
       allow create, update: if isAdmin() &&
-        collection in ['asset_categories', 'asset_models', 'custody_items'];
+        collection in ['asset_categories', 'asset_models'];
       allow delete: if false;
     }
   }
