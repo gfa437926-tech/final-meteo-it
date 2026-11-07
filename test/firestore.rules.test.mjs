@@ -75,8 +75,19 @@ beforeEach(async () => {
     });
     await setDoc(doc(db, 'custody_cards', 'card-2'), {
       assetId: 'asset-2', assetLabel: 'Lenovo ThinkCentre',
-      employeeName: 'Test Employee', officeName: 'تقنية المعلومات',
+      employeeName: 'Test Employee', officeName: 'Office A',
       status: 'active', approvalStatus: 'pending',
+    });
+    await setDoc(doc(db, 'custody_cards', 'card-b'), {
+      assetId: 'asset-b', assetLabel: 'HP ProDesk',
+      employeeName: 'Office B Employee', officeName: 'Office B',
+      status: 'active', approvalStatus: 'pending',
+    });
+    await setDoc(doc(db, 'asset_documents', 'document-a'), {
+      assetId: 'asset-1', fileName: 'office-a.pdf', storagePath: 'asset_documents/asset-1/office-a.pdf',
+    });
+    await setDoc(doc(db, 'asset_documents', 'document-b'), {
+      assetId: 'asset-b', fileName: 'office-b.pdf', storagePath: 'asset_documents/asset-b/office-b.pdf',
     });
   });
 });
@@ -556,4 +567,19 @@ test('a transfer requires access to both the source and destination offices', as
       occurredAt: new Date(),
     });
   }));
+});
+
+
+test('custody cards and Firestore attachment metadata follow the linked asset office', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  await assertSucceeds(getDoc(doc(managerA, 'custody_cards', 'card-2')));
+  await assertFails(getDoc(doc(managerA, 'custody_cards', 'card-b')));
+  await assertSucceeds(getDoc(doc(managerB, 'custody_cards', 'card-b')));
+  await assertFails(getDoc(doc(managerB, 'custody_cards', 'card-2')));
+
+  await assertSucceeds(getDoc(doc(managerA, 'asset_documents', 'document-a')));
+  await assertFails(getDoc(doc(managerA, 'asset_documents', 'document-b')));
+  await assertSucceeds(getDoc(doc(managerB, 'asset_documents', 'document-b')));
+  await assertFails(getDoc(doc(managerB, 'asset_documents', 'document-a')));
 });
