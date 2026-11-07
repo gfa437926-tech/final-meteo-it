@@ -205,7 +205,7 @@ service cloud.firestore {
 
     match /assets/{assetId} {
       // Documents with no officeId are legacy/unassigned and admin-only.
-      allow read: if canReadAsset(resource.data);
+      allow read: if (resource == null && isActiveUser()) || canReadAsset(resource.data);
       allow create: if canWriteAsset(request.resource.data);
       // Updates must be authorized at both ends; this enforces source and
       // destination access for cross-office transfers.
@@ -215,7 +215,7 @@ service cloud.firestore {
     }
 
     match /asset_serials/{serialId} {
-      allow read: if isSuperAdmin() ||
+      allow read: if (resource == null && isActiveUser()) || isSuperAdmin() ||
         (resource.data.keys().hasAny(['officeId']) &&
          hasOfficeAccess(resource.data.officeId));
       allow create: if canWriteAsset(request.resource.data);
