@@ -87,7 +87,7 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
                 .where((office) => office.isActive || office.id == officeId)
                 .toList();
             return DropdownButtonFormField<String>(
-              initialValue: officeId ?? '',
+              initialValue: officeId,
               decoration: const InputDecoration(
                 labelText: 'المكتب الحالي',
                 helperText: 'يجب إسناد كل أصل جديد إلى مكتب محدد',
