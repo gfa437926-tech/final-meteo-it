@@ -47,10 +47,10 @@ class _CustodyScreenState extends State<CustodyScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
                   stream: AssetRepository().watchAssetDocuments(status: 'available'),
                   builder: (context, snapshot) {
-                    final docs = snapshot.data?.docs ?? [];
+                    final docs = snapshot.data ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
                     return DropdownButtonFormField<String>(
                       decoration: const InputDecoration(
                         labelText: 'الجهاز المتاح',
