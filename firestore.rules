@@ -221,7 +221,9 @@ service cloud.firestore {
       allow create: if canWriteAsset(request.resource.data);
       allow update: if canWriteAsset(resource.data) &&
         canWriteAsset(request.resource.data);
-      allow delete: if false;
+      allow delete: if isSuperAdmin() ||
+        (resource.data.keys().hasAny(['officeId']) &&
+         hasOfficeAccess(resource.data.officeId));
     }
 
     match /asset_movements/{movementId} {
