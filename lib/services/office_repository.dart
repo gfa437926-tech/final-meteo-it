@@ -30,8 +30,13 @@ class OfficeRepository {
         // The Firestore query is restricted before data is downloaded.
         query = _offices.where('id', whereIn: officeIds);
       }
-      return query.orderBy('name').snapshots().map((snapshot) =>
-          snapshot.docs.map((doc) => Office.fromMap(doc.id, doc.data())).toList());
+      return query.snapshots().map((snapshot) {
+        final offices = snapshot.docs
+            .map((doc) => Office.fromMap(doc.id, doc.data()))
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+        return offices;
+      });
     });
   }
 
