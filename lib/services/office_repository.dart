@@ -28,7 +28,9 @@ class OfficeRepository {
           return Stream.value(const <Office>[]);
         }
         // The Firestore query is restricted before data is downloaded.
-        query = _offices.where('id', whereIn: officeIds);
+        query = _offices
+            .where(FieldPath.documentId, whereIn: officeIds)
+            .where('isActive', isEqualTo: true);
       }
       return query.snapshots().map((snapshot) {
         final offices = snapshot.docs
