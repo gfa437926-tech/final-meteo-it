@@ -6,14 +6,37 @@ service firebase.storage {
       return request.auth != null &&
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isActive == true;
     }
-    function adminUser() {
+    function superAdmin() {
       return activeUser() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['admin', 'it_manager'];
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function assignedOfficeIds() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('officeIds', []);
+    }
+    function hasOfficeAccess(officeId) {
+      return superAdmin() ||
+        (activeUser() &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'it_manager' &&
+         officeId is string &&
+         assignedOfficeIds() is list &&
+         assignedOfficeIds().hasAny([officeId]));
+    }
+    function assetExists(assetId) {
+      return firestore.exists(/databases/(default)/documents/assets/$(assetId));
+    }
+    function assetOfficeId(assetId) {
+      return firestore.get(/databases/(default)/documents/assets/$(assetId)).data.get('officeId', '');
+    }
+    function canAccessAsset(assetId) {
+      return assetExists(assetId) && hasOfficeAccess(assetOfficeId(assetId));
     }
 
     match /asset_documents/{assetId}/{fileName} {
-      allow read: if activeUser();
-      allow create: if resource == null && adminUser() &&
+      // The storage path is not an authorization boundary by itself:
+      // every operation resolves the asset and checks its office assignment.
+      allow read: if canAccessAsset(assetId);
+      allow create: if resource == null &&
+        canAccessAsset(assetId) &&
         request.resource.size < 10 * 1024 * 1024 &&
         request.resource.contentType.matches(
           'application/pdf|image/png|image/jpeg|application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
