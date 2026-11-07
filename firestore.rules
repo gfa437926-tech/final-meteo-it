@@ -44,10 +44,39 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/offices/$(data.officeId)) &&
          get(/databases/$(database)/documents/offices/$(data.officeId)).data.isActive == true);
     }
+    function validOfficeIdAt(ids, index) {
+      return ids.size() <= index ||
+        (ids[index] is string &&
+         ids[index].size() > 0 &&
+         ids[index].size() <= 128);
+    }
+    function validOfficeIds(ids) {
+      return ids is list &&
+        ids.size() <= 20 &&
+        validOfficeIdAt(ids, 0) &&
+        validOfficeIdAt(ids, 1) &&
+        validOfficeIdAt(ids, 2) &&
+        validOfficeIdAt(ids, 3) &&
+        validOfficeIdAt(ids, 4) &&
+        validOfficeIdAt(ids, 5) &&
+        validOfficeIdAt(ids, 6) &&
+        validOfficeIdAt(ids, 7) &&
+        validOfficeIdAt(ids, 8) &&
+        validOfficeIdAt(ids, 9) &&
+        validOfficeIdAt(ids, 10) &&
+        validOfficeIdAt(ids, 11) &&
+        validOfficeIdAt(ids, 12) &&
+        validOfficeIdAt(ids, 13) &&
+        validOfficeIdAt(ids, 14) &&
+        validOfficeIdAt(ids, 15) &&
+        validOfficeIdAt(ids, 16) &&
+        validOfficeIdAt(ids, 17) &&
+        validOfficeIdAt(ids, 18) &&
+        validOfficeIdAt(ids, 19);
+    }
     function validOfficeAssignment(data) {
       return data.keys().hasAny(['officeIds']) &&
-        data.officeIds is list &&
-        data.officeIds.size() <= 20 &&
+        validOfficeIds(data.officeIds) &&
         ((data.role == 'admin' && data.officeIds.size() == 0) ||
          (data.role == 'it_manager' && data.officeIds.size() >= 1));
     }
