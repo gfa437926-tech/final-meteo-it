@@ -428,6 +428,35 @@ test('office A manager cannot read or write office B records; admin retains glob
   }));
 });
 
+test('inactive offices revoke manager access to linked assets and attachments', async () => {
+  const admin = env.authenticatedContext('admin-1').firestore();
+  const managerStorage = env.authenticatedContext('manager-1').storage();
+  const managerDb = env.authenticatedContext('manager-1').firestore();
+  const adminStorage = env.authenticatedContext('admin-1').storage();
+
+  const attachment = storageRef(adminStorage, 'asset_documents/asset-1/inactive-office.pdf');
+  await assertSucceeds(uploadBytes(attachment, new Uint8Array([1, 2, 3]), {
+    contentType: 'application/pdf',
+  }));
+  await assertSucceeds(getDoc(doc(managerDb, 'assets', 'asset-1')));
+  await assertSucceeds(getBytes(storageRef(managerStorage, 'asset_documents/asset-1/inactive-office.pdf')));
+
+  await assertSucceeds(updateDoc(doc(admin, 'offices', 'office-a'), {
+    isActive: false,
+  }));
+  await assertFails(getDoc(doc(managerDb, 'offices', 'office-a')));
+  await assertFails(getDoc(doc(managerDb, 'assets', 'asset-1')));
+  await assertFails(updateDoc(doc(managerDb, 'assets', 'asset-1'), {
+    brand: 'Must not update an inactive-office asset',
+  }));
+  await assertFails(getBytes(storageRef(managerStorage, 'asset_documents/asset-1/inactive-office.pdf')));
+  await assertFails(uploadBytes(
+    storageRef(managerStorage, 'asset_documents/asset-1/new-inactive-office.pdf'),
+    new Uint8Array([4, 5, 6]),
+    { contentType: 'application/pdf' },
+  ));
+});
+
 test('asset reads and writes are isolated by officeId and legacy records are admin-only', async () => {
   const managerA = env.authenticatedContext('manager-1').firestore();
   const managerB = env.authenticatedContext('manager-b').firestore();
