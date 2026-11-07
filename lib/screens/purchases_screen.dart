@@ -129,7 +129,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
                       stream: AssetRepository().watchAssetDocuments(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
@@ -138,7 +138,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                         if (!snapshot.hasData) {
                           return const LinearProgressIndicator();
                         }
-                        final assets = snapshot.data!.docs;
+                        final assets = snapshot.data!;
                         return DropdownButtonFormField<String>(
                           initialValue: assetId,
                           decoration: const InputDecoration(labelText: 'الأصل المرتبط'),
