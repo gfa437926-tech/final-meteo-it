@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:metra_it_assets/models/asset.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
+import 'package:metra_it_assets/services/office_repository.dart';
 import 'package:metra_it_assets/screens/offices_screen.dart';
 import 'package:metra_it_assets/screens/assets_screen.dart';
 import 'package:metra_it_assets/screens/custody_screen.dart';
@@ -118,7 +120,7 @@ class _LiveMetrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        stream: AssetRepository().watchAssetDocuments(),
         builder: (context, assetSnapshot) {
           if (assetSnapshot.hasError) {
             return const Text('تعذر تحميل إحصائيات الأصول');
@@ -130,9 +132,9 @@ class _LiveMetrics extends StatelessWidget {
           final assigned = assets.where((doc) => doc.data()['status'] == 'assigned').length;
           final maintenance = assets.where((doc) => doc.data()['status'] == 'maintenance').length;
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('offices').snapshots(),
+            stream: OfficeRepository().watchOffices(),
             builder: (context, officeSnapshot) {
-              final officeCount = officeSnapshot.data?.docs.length ?? 0;
+              final officeCount = officeSnapshot.data?.length ?? 0;
               return Wrap(
                 spacing: 14,
                 runSpacing: 14,
@@ -225,7 +227,7 @@ class _LiveCategoryOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        stream: AssetRepository().watchAssetDocuments(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Text('تعذر تحميل توزيع الأصول حسب النوع');
