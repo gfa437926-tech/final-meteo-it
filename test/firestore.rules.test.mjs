@@ -84,10 +84,17 @@ beforeEach(async () => {
       status: 'active', approvalStatus: 'pending',
     });
     await setDoc(doc(db, 'asset_documents', 'document-a'), {
-      assetId: 'asset-1', fileName: 'office-a.pdf', storagePath: 'asset_documents/asset-1/office-a.pdf',
+      assetId: 'asset-1', officeId: 'office-a',
+      fileName: 'office-a.pdf', storagePath: 'asset_documents/asset-1/office-a.pdf',
     });
     await setDoc(doc(db, 'asset_documents', 'document-b'), {
-      assetId: 'asset-b', fileName: 'office-b.pdf', storagePath: 'asset_documents/asset-b/office-b.pdf',
+      assetId: 'asset-b', officeId: 'office-b',
+      fileName: 'office-b.pdf', storagePath: 'asset_documents/asset-b/office-b.pdf',
+    });
+    // A forged metadata office must not override the office on the linked asset.
+    await setDoc(doc(db, 'asset_documents', 'document-mismatch'), {
+      assetId: 'asset-1', officeId: 'office-b',
+      fileName: 'forged.pdf', storagePath: 'asset_documents/asset-1/forged.pdf',
     });
   });
 });
@@ -582,4 +589,6 @@ test('custody cards and Firestore attachment metadata follow the linked asset of
   await assertFails(getDoc(doc(managerA, 'asset_documents', 'document-b')));
   await assertSucceeds(getDoc(doc(managerB, 'asset_documents', 'document-b')));
   await assertFails(getDoc(doc(managerB, 'asset_documents', 'document-a')));
+  await assertFails(getDoc(doc(managerA, 'asset_documents', 'document-mismatch')));
+  await assertFails(getDoc(doc(managerB, 'asset_documents', 'document-mismatch')));
 });
