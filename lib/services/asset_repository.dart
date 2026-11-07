@@ -17,6 +17,16 @@ class AssetRepository {
   CollectionReference<Map<String, dynamic>> get _serials =>
       _db.collection('asset_serials');
 
+  Future<List<String>> _activeAssignedOfficeIds(List<String> officeIds) async {
+    if (officeIds.isEmpty) return const <String>[];
+    final snapshot = await _db
+        .collection('offices')
+        .where(FieldPath.documentId, whereIn: officeIds)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map((document) => document.id).toList();
+  }
+
   String _normalizeSerial(String serial) => serial.trim().toUpperCase();
 
   DocumentReference<Map<String, dynamic>> _serialRef(String serial) {
@@ -57,11 +67,19 @@ class AssetRepository {
       }
       // The query itself is office constrained; client-side filtering alone
       // would still request records outside the caller's authorization scope.
-      return _assets
-          .where('officeId', whereIn: officeIds)
-          .snapshots()
-          .map((snapshot) => _filterAssetDocuments(
-                snapshot.docs, status: status, statuses: statuses));
+      return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+          .asyncExpand((activeOfficeIds) {
+        if (activeOfficeIds.isEmpty) {
+          return Stream.value(
+            const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          );
+        }
+        return _assets
+            .where('officeId', whereIn: activeOfficeIds)
+            .snapshots()
+            .map((snapshot) => _filterAssetDocuments(
+                  snapshot.docs, status: status, statuses: statuses));
+      });
     });
   }
 
@@ -92,7 +110,26 @@ class AssetRepository {
             const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
           );
         }
-        query = query.where('officeId', whereIn: officeIds);
+        return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+            .asyncExpand((activeOfficeIds) {
+          if (activeOfficeIds.isEmpty) {
+            return Stream.value(
+              const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+            );
+          }
+          final scopedQuery = query.where('officeId', whereIn: activeOfficeIds);
+          return scopedQuery.snapshots().map((snapshot) {
+            final documents = snapshot.docs.toList()
+              ..sort((a, b) {
+                final aTime = a.data()['occurredAt'];
+                final bTime = b.data()['occurredAt'];
+                final aDate = aTime is Timestamp ? aTime.toDate() : DateTime(2000);
+                final bDate = bTime is Timestamp ? bTime.toDate() : DateTime(2000);
+                return bDate.compareTo(aDate);
+              });
+            return documents.take(5).toList();
+          });
+        });
       }
       return query.snapshots().map((snapshot) {
         final documents = snapshot.docs.toList()
