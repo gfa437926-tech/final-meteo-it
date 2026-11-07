@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/maintenance_record.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MaintenanceRepository {
   MaintenanceRepository({FirebaseFirestore? firestore})
@@ -10,12 +11,25 @@ class MaintenanceRepository {
   CollectionReference<Map<String, dynamic>> get records =>
       db.collection('maintenance_records');
 
-  Stream<List<MaintenanceRecord>> watch() =>
-      records.orderBy('reportedAt', descending: true).snapshots().map(
-            (snapshot) => snapshot.docs
-                .map((doc) => MaintenanceRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          );
+  Stream<List<MaintenanceRecord>> watch() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return Stream.value(const <MaintenanceRecord>[]);
+    return db.collection('users').doc(uid).snapshots().asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) return Stream.value(const <MaintenanceRecord>[]);
+      Query<Map<String, dynamic>> query = records;
+      if (data['role'] != 'admin') {
+        final ids = data['officeIds'];
+        final officeIds = ids is List ? ids.whereType<String>().toList() : <String>[];
+        if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+          return Stream.value(const <MaintenanceRecord>[]);
+        }
+        query = query.where('officeId', whereIn: officeIds);
+      }
+      return query.orderBy('reportedAt', descending: true).snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => MaintenanceRecord.fromMap(doc.id, doc.data())).toList());
+    });
+  }
 
   Future<void> create(MaintenanceRecord record) =>
       db.runTransaction((transaction) async {
@@ -32,6 +46,8 @@ class MaintenanceRepository {
         }
 
         final assetData = assetSnapshot.data()!;
+        final officeId = assetData['officeId'] as String? ?? '';
+        if (officeId.isEmpty) throw StateError('الأصل غير مرتبط بمكتب');
         final previousStatus =
             assetData['status'] as String? ?? 'available';
         if (previousStatus == 'retired') {
@@ -55,6 +71,7 @@ class MaintenanceRepository {
 
         transaction.set(recordRef, {
           ...record.toMap(),
+          'officeId': officeId,
           'assetLabel': canonicalLabel,
           'reportedAt': now,
           'previousAssetStatus': previousStatus,
@@ -65,6 +82,7 @@ class MaintenanceRepository {
         final movement = db.collection('asset_movements').doc();
         transaction.set(movement, {
           'assetId': record.assetId,
+          'officeId': officeId,
           'assetLabel': canonicalLabel,
           'movementType': 'maintenance_opened',
           'occurredAt': now,
@@ -104,6 +122,9 @@ class MaintenanceRepository {
           throw StateError('الجهاز المرتبط غير موجود');
         }
         final assetData = assetSnapshot.data()!;
+        if ((assetData['officeId'] as String? ?? '') != (data['officeId'] as String? ?? '')) {
+          throw StateError('مكتب الأصل لا يطابق مكتب طلب الصيانة');
+        }
         if (assetData['status'] != 'maintenance') {
           throw StateError('حالة الجهاز تغيرت ولا يمكن إغلاق الطلب بأمان');
         }
@@ -114,6 +135,7 @@ class MaintenanceRepository {
         final now = FieldValue.serverTimestamp();
 
         transaction.update(recordRef, {
+          'officeId': assetData['officeId'],
           'status': MaintenanceStatus.completed.name,
           'resolution': resolution.trim(),
           'cost': cost,
@@ -124,6 +146,7 @@ class MaintenanceRepository {
         final movement = db.collection('asset_movements').doc();
         transaction.set(movement, {
           'assetId': assetId,
+          'officeId': assetData['officeId'],
           'assetLabel': assetLabel,
           'movementType': 'maintenance_completed',
           'occurredAt': now,
