@@ -627,3 +627,47 @@ test('custody cards and Firestore attachment metadata follow the linked asset of
     storagePath: 'asset_documents/asset-1/forged.pdf',
   }));
 });
+
+test('maintenance and purchases are isolated by linked asset office', async () => {
+  const a = env.authenticatedContext('manager-1').firestore();
+  const b = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'maintenance_records', 'maintenance-a'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'Office A repair',
+      status: 'open', reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'maintenance_records', 'maintenance-b'), {
+      assetId: 'asset-b', officeId: 'office-b', title: 'Office B repair',
+      status: 'open', reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'purchase_records', 'purchase-a'), {
+      assetId: 'asset-1', officeId: 'office-a', supplier: 'Supplier A',
+      purchaseDate: new Date(), totalCost: 10,
+    });
+    await setDoc(doc(db, 'purchase_records', 'purchase-b'), {
+      assetId: 'asset-b', officeId: 'office-b', supplier: 'Supplier B',
+      purchaseDate: new Date(), totalCost: 20,
+    });
+  });
+  await assertSucceeds(getDoc(doc(a, 'maintenance_records', 'maintenance-a')));
+  await assertFails(getDoc(doc(a, 'maintenance_records', 'maintenance-b')));
+  await assertSucceeds(getDoc(doc(b, 'maintenance_records', 'maintenance-b')));
+  await assertFails(getDoc(doc(b, 'maintenance_records', 'maintenance-a')));
+  await assertSucceeds(getDoc(doc(a, 'purchase_records', 'purchase-a')));
+  await assertFails(getDoc(doc(a, 'purchase_records', 'purchase-b')));
+  await assertSucceeds(getDoc(doc(b, 'purchase_records', 'purchase-b')));
+  await assertFails(getDoc(doc(b, 'purchase_records', 'purchase-a')));
+  await assertFails(setDoc(doc(a, 'purchase_records', 'forged'), {
+    assetId: 'asset-1', officeId: 'office-b', supplier: 'Forged',
+    purchaseDate: new Date(), totalCost: 1,
+  }));
+  await assertFails(setDoc(doc(a, 'maintenance_records', 'forged'), {
+    assetId: 'asset-1', officeId: 'office-b', title: 'Forged',
+    status: 'open', reportedAt: new Date(),
+  }));
+  await assertSucceeds(getDoc(doc(admin, 'maintenance_records', 'maintenance-b')));
+  await assertSucceeds(getDoc(doc(admin, 'purchase_records', 'purchase-b')));
+});
+
