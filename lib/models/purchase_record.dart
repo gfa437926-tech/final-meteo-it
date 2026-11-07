@@ -4,6 +4,7 @@ class PurchaseRecord {
   const PurchaseRecord({
     required this.id,
     required this.assetId,
+    this.officeId = '',
     required this.assetLabel,
     required this.supplier,
     required this.invoiceNumber,
@@ -15,6 +16,7 @@ class PurchaseRecord {
 
   final String id;
   final String assetId;
+  final String officeId;
   final String assetLabel;
   final String supplier;
   final String invoiceNumber;
@@ -25,6 +27,7 @@ class PurchaseRecord {
 
   Map<String, Object?> toMap() => {
         'assetId': assetId,
+        'officeId': officeId,
         'assetLabel': assetLabel,
         'supplier': supplier.trim(),
         'invoiceNumber': invoiceNumber.trim(),
@@ -39,6 +42,7 @@ class PurchaseRecord {
       PurchaseRecord(
         id: id,
         assetId: map['assetId'] as String? ?? '',
+        officeId: map['officeId'] as String? ?? '',
         assetLabel: map['assetLabel'] as String? ?? '',
         supplier: map['supplier'] as String? ?? '',
         invoiceNumber: map['invoiceNumber'] as String? ?? '',
