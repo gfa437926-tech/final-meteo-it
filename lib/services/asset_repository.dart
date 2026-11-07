@@ -27,7 +27,7 @@ class AssetRepository {
   }
 
   Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      watchAssetDocuments() {
+      watchAssetDocuments({String? status, List<String>? statuses}) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return Stream.value(
@@ -43,7 +43,8 @@ class AssetRepository {
         );
       }
       if (data['role'] == 'admin') {
-        return _assets.orderBy('brand').snapshots().map((snapshot) => snapshot.docs);
+        return _assets.snapshots().map((snapshot) => _filterAssetDocuments(
+              snapshot.docs, status: status, statuses: statuses));
       }
       final rawOfficeIds = data['officeIds'];
       final officeIds = rawOfficeIds is List
@@ -59,8 +60,25 @@ class AssetRepository {
       return _assets
           .where('officeId', whereIn: officeIds)
           .snapshots()
-          .map((snapshot) => snapshot.docs);
+          .map((snapshot) => _filterAssetDocuments(
+                snapshot.docs, status: status, statuses: statuses));
     });
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _filterAssetDocuments(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents, {
+    String? status,
+    List<String>? statuses,
+  }) {
+    final filtered = documents.where((document) {
+      final value = document.data()['status'];
+      if (status != null) return value == status;
+      if (statuses != null && statuses.isNotEmpty) return statuses.contains(value);
+      return true;
+    }).toList()
+      ..sort((a, b) => ((a.data()['brand'] as String?) ?? '')
+          .compareTo((b.data()['brand'] as String?) ?? ''));
+    return filtered;
   }
 
   Stream<List<Asset>> watchAssets() => watchAssetDocuments().map(
