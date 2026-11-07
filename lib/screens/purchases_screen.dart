@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:metra_it_assets/models/purchase_record.dart';
 import 'package:metra_it_assets/services/purchase_repository.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -129,10 +130,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('assets')
-                          .orderBy('brand')
-                          .snapshots(),
+                      stream: AssetRepository().watchAssetDocuments(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Text('تعذر تحميل الأصول: ${snapshot.error}');
