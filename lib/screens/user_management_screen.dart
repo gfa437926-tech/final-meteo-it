@@ -22,9 +22,10 @@ class UserManagementScreen extends StatelessWidget {
     final isNew = profile == null;
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final isSelf = profile?.id == currentUid;
-    final originalOfficeIds = ((profile?.data()?['officeIds'] as List?) ?? const [])
-        .whereType<String>()
-        .toSet();
+    final rawOfficeIds = profile?.data()?['officeIds'];
+    final originalOfficeIds = rawOfficeIds is List
+        ? rawOfficeIds.whereType<String>().toSet()
+        : <String>{};
     final selectedOfficeIds = <String>{...originalOfficeIds};
     final formKey = GlobalKey<FormState>();
     var officeSelectionError = false;
