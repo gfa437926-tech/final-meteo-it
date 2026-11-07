@@ -35,22 +35,39 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await setDoc(doc(db, 'users', 'admin-1'), {
-      role: 'admin', isActive: true, displayName: 'Admin',
+      role: 'admin', isActive: true, displayName: 'Admin', officeIds: [],
     });
     await setDoc(doc(db, 'users', 'manager-1'), {
       role: 'it_manager', isActive: true, displayName: 'Manager',
-      email: 'manager@example.com',
+      email: 'manager@example.com', officeIds: ['office-a'],
+    });
+    await setDoc(doc(db, 'users', 'manager-b'), {
+      role: 'it_manager', isActive: true, displayName: 'Manager B',
+      email: 'manager-b@example.com', officeIds: ['office-b'],
+    });
+    await setDoc(doc(db, 'offices', 'office-a'), {
+      id: 'office-a', name: 'Office A', isActive: true,
+    });
+    await setDoc(doc(db, 'offices', 'office-b'), {
+      id: 'office-b', name: 'Office B', isActive: true,
     });
     await setDoc(doc(db, 'users', 'inactive-1'), {
       role: 'admin', isActive: false,
     });
     await setDoc(doc(db, 'assets', 'asset-1'), {
       brand: 'Dell', model: 'OptiPlex', status: 'available',
-      officeName: 'تقنية المعلومات',
+      officeId: 'office-a', officeName: 'Office A',
     });
     await setDoc(doc(db, 'assets', 'asset-2'), {
       brand: 'Lenovo', model: 'ThinkCentre', status: 'assigned',
-      officeName: 'تقنية المعلومات',
+      officeId: 'office-a', officeName: 'Office A',
+    });
+    await setDoc(doc(db, 'assets', 'asset-b'), {
+      brand: 'HP', model: 'ProDesk', status: 'available',
+      officeId: 'office-b', officeName: 'Office B',
+    });
+    await setDoc(doc(db, 'assets', 'legacy-asset'), {
+      brand: 'Legacy', model: 'Unassigned', status: 'available',
     });
     await setDoc(doc(db, 'custody_cards', 'card-2'), {
       assetId: 'asset-2', assetLabel: 'Lenovo ThinkCentre',
@@ -116,7 +133,7 @@ test('users cannot elevate their own role', async () => {
 test('only a super administrator can provision another user profile', async () => {
   const managerDb = env.authenticatedContext('manager-1').firestore();
   await assertFails(setDoc(doc(managerDb, 'users', 'new-user'), {
-    role: 'it_manager', isActive: true, displayName: 'New User', email: 'new@example.com', createdAt: 1,
+    role: 'it_manager', isActive: true, displayName: 'New User', officeIds: ['office-a'], email: 'new@example.com', officeIds: ['office-a'], createdAt: 1,
   }));
 
   const adminDb = env.authenticatedContext('admin-1').firestore();
@@ -125,6 +142,7 @@ test('only a super administrator can provision another user profile', async () =
     isActive: true,
     displayName: 'New User',
     email: 'new@example.com',
+    officeIds: ['office-a'],
     createdAt: new Date(),
   }));
 });
@@ -346,11 +364,11 @@ test('user profile creation rejects unsupported roles and unexpected fields', as
   const db = env.authenticatedContext('admin-1').firestore();
   await assertFails(setDoc(doc(db, 'users', 'bad-role'), {
     role: 'superuser', isActive: true, displayName: 'Bad Role',
-    email: 'bad@example.com', createdAt: 1,
+    email: 'bad@example.com', officeIds: ['office-a'], createdAt: 1,
   }));
   await assertFails(setDoc(doc(db, 'users', 'extra-field'), {
     role: 'it_manager', isActive: true, displayName: 'Extra Field',
-    email: 'extra@example.com', createdAt: 1, password: 'must-not-be-stored',
+    email: 'extra@example.com', officeIds: ['office-a'], createdAt: 1, password: 'must-not-be-stored',
   }));
 });
 
@@ -365,4 +383,134 @@ test('administrator profile updates reject unexpected privilege fields', async (
   await assertSucceeds(updateDoc(doc(db, 'users', 'manager-1'), {
     displayName: 'Updated Manager', role: 'it_manager', isActive: true,
   }));
+});
+
+
+test('office A manager cannot read or write office B records; admin retains global access', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+
+  await assertSucceeds(getDoc(doc(managerA, 'offices', 'office-a')));
+  await assertFails(getDoc(doc(managerA, 'offices', 'office-b')));
+  await assertSucceeds(getDoc(doc(managerB, 'offices', 'office-b')));
+  await assertFails(getDoc(doc(managerB, 'offices', 'office-a')));
+  await assertSucceeds(getDoc(doc(admin, 'offices', 'office-a')));
+  await assertSucceeds(getDoc(doc(admin, 'offices', 'office-b')));
+
+  await assertFails(updateDoc(doc(managerA, 'offices', 'office-a'), {
+    name: 'Manager cannot administer office catalogue',
+  }));
+  await assertFails(updateDoc(doc(managerA, 'offices', 'office-b'), {
+    name: 'Cross-office write',
+  }));
+});
+
+test('asset reads and writes are isolated by officeId and legacy records are admin-only', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+
+  await assertSucceeds(getDoc(doc(managerA, 'assets', 'asset-1')));
+  await assertFails(getDoc(doc(managerA, 'assets', 'asset-b')));
+  await assertFails(getDoc(doc(managerA, 'assets', 'legacy-asset')));
+  await assertSucceeds(getDoc(doc(managerB, 'assets', 'asset-b')));
+  await assertFails(getDoc(doc(managerB, 'assets', 'asset-1')));
+  await assertSucceeds(getDoc(doc(admin, 'assets', 'legacy-asset')));
+
+  await assertSucceeds(updateDoc(doc(managerA, 'assets', 'asset-1'), {
+    brand: 'Dell Updated',
+  }));
+  await assertFails(updateDoc(doc(managerA, 'assets', 'asset-b'), {
+    brand: 'Forged cross-office edit',
+  }));
+  await assertFails(updateDoc(doc(managerA, 'assets', 'asset-1'), {
+    officeId: 'office-b',
+  }));
+  await assertSucceeds(setDoc(doc(managerA, 'assets', 'asset-a-new'), {
+    id: 'asset-a-new', brand: 'A', model: 'A1', officeId: 'office-a',
+    status: 'available',
+  }));
+  await assertFails(setDoc(doc(managerA, 'assets', 'asset-b-forged'), {
+    id: 'asset-b-forged', brand: 'B', model: 'B1', officeId: 'office-b',
+    status: 'available',
+  }));
+  await assertFails(setDoc(doc(managerA, 'assets', 'asset-unassigned'), {
+    id: 'asset-unassigned', brand: 'Legacy', model: 'Unknown',
+    status: 'available',
+  }));
+});
+
+test('office manager cannot change own or another user office assignments', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await assertFails(updateDoc(doc(manager, 'users', 'manager-1'), {
+    officeIds: ['office-b'],
+  }));
+  await assertFails(updateDoc(doc(manager, 'users', 'manager-b'), {
+    officeIds: ['office-a'],
+  }));
+  await assertSucceeds(updateDoc(doc(admin, 'users', 'manager-1'), {
+    officeIds: ['office-a', 'office-b'],
+  }));
+  await assertFails(updateDoc(doc(admin, 'users', 'manager-1'), {
+    officeIds: [],
+  }));
+  await assertSucceeds(updateDoc(doc(admin, 'users', 'manager-1'), {
+    officeIds: ['office-a'],
+  }));
+});
+
+test('new user profiles require valid office assignments and admins remain global', async () => {
+  const admin = env.authenticatedContext('admin-1').firestore();
+  const base = {
+    displayName: 'Provisioned', email: 'provisioned@example.com',
+    isActive: true, createdAt: new Date(),
+  };
+  await assertSucceeds(setDoc(doc(admin, 'users', 'new-office-manager'), {
+    ...base, role: 'it_manager', officeIds: ['office-a'],
+  }));
+  await assertFails(setDoc(doc(admin, 'users', 'manager-no-office'), {
+    ...base, role: 'it_manager', officeIds: [],
+  }));
+  await assertFails(setDoc(doc(admin, 'users', 'manager-malformed'), {
+    ...base, role: 'it_manager', officeIds: [42],
+  }));
+  await assertFails(setDoc(doc(admin, 'users', 'admin-with-office'), {
+    ...base, role: 'admin', officeIds: ['office-a'],
+  }));
+  await assertSucceeds(setDoc(doc(admin, 'users', 'global-admin'), {
+    ...base, role: 'admin', officeIds: [],
+  }));
+});
+
+test('storage reads and uploads are authorized through the linked asset office', async () => {
+  const adminStorage = env.authenticatedContext('admin-1').storage();
+  const fileA = storageRef(adminStorage, 'asset_documents/asset-1/office-a.pdf');
+  const fileB = storageRef(adminStorage, 'asset_documents/asset-b/office-b.pdf');
+  await assertSucceeds(uploadBytes(fileA, new Uint8Array([1, 2, 3]), {
+    contentType: 'application/pdf',
+  }));
+  await assertSucceeds(uploadBytes(fileB, new Uint8Array([4, 5, 6]), {
+    contentType: 'application/pdf',
+  }));
+
+  const managerA = env.authenticatedContext('manager-1').storage();
+  const managerB = env.authenticatedContext('manager-b').storage();
+  await assertSucceeds(getBytes(storageRef(managerA, 'asset_documents/asset-1/office-a.pdf')));
+  await assertFails(getBytes(storageRef(managerA, 'asset_documents/asset-b/office-b.pdf')));
+  await assertSucceeds(getBytes(storageRef(managerB, 'asset_documents/asset-b/office-b.pdf')));
+  await assertFails(getBytes(storageRef(managerB, 'asset_documents/asset-1/office-a.pdf')));
+
+  await assertSucceeds(uploadBytes(
+    storageRef(managerA, 'asset_documents/asset-1/manager-upload.pdf'),
+    new Uint8Array([7, 8, 9]),
+    { contentType: 'application/pdf' },
+  ));
+  await assertFails(uploadBytes(
+    storageRef(managerA, 'asset_documents/asset-b/forbidden-upload.pdf'),
+    new Uint8Array([7, 8, 9]),
+    { contentType: 'application/pdf' },
+  ));
+  await assertFails(getBytes(storageRef(managerA, 'asset_documents/missing-asset/no-link.pdf')));
 });
