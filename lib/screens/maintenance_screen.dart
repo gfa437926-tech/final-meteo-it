@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/maintenance_record.dart';
 import '../services/maintenance_repository.dart';
+import '../services/asset_repository.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -21,7 +22,9 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
         title: const Text('فتح طلب صيانة'),
         content: SizedBox(width: 480, child: Form(key: form, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('assets').where('status', whereIn: ['available','damaged','returned']).snapshots(),
+            stream: AssetRepository().watchAssetDocuments(
+              statuses: ['available', 'damaged', 'returned'],
+            ),
             builder: (ctx, snap) {
               final docs = snap.data?.docs ?? [];
               return DropdownButtonFormField<String>(
