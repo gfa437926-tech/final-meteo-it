@@ -75,6 +75,12 @@ class UserProfile {
     if (normalized.any((value) => value.isEmpty)) {
       throw ArgumentError('Office IDs cannot be empty');
     }
+    if (normalized.length > 20) {
+      throw ArgumentError('A user cannot be assigned more than 20 offices');
+    }
+    if (normalized.any((value) => value.length > 128)) {
+      throw ArgumentError('Office IDs cannot exceed 128 characters');
+    }
     if (normalized.toSet().length != normalized.length) {
       throw ArgumentError('Office IDs must be unique');
     }
