@@ -170,20 +170,23 @@ class AssetRepository {
         if (fromOfficeId == destination.id) {
           throw StateError('الجهاز موجود بالفعل في المكتب المحدد');
         }
+        final serial = _normalizeSerial(data['serialNumber'] as String? ?? '');
+        DocumentReference<Map<String, dynamic>>? serialRef;
+        DocumentSnapshot<Map<String, dynamic>>? serialSnapshot;
+        if (serial.isNotEmpty) {
+          serialRef = _serialRef(serial);
+          serialSnapshot = await tx.get(serialRef);
+        }
+        // All transaction reads are completed before the first write.
         tx.update(assetRef, {
           'officeId': destination.id,
           'officeName': officeName,
           'transferredAt': FieldValue.serverTimestamp(),
         });
-        final movement = _db.collection('asset_movements').doc();
-        final serial = _normalizeSerial(data['serialNumber'] as String? ?? '');
-        if (serial.isNotEmpty) {
-          final serialRef = _serialRef(serial);
-          final serialSnapshot = await tx.get(serialRef);
-          if (serialSnapshot.exists) {
-            tx.update(serialRef, {'officeId': destination.id});
-          }
+        if (serialRef != null && serialSnapshot!.exists) {
+          tx.update(serialRef, {'officeId': destination.id});
         }
+        final movement = _db.collection('asset_movements').doc();
         tx.set(movement, {
           'assetId': asset.id,
           'assetLabel': '${data['brand'] ?? ''} ${data['model'] ?? ''}'.trim(),
