@@ -29,7 +29,7 @@ class AssetRepository {
   Stream<List<Asset>> watchAssets() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return Stream.value(const <Asset>[]);
-    return _db.collection('users').doc(uid).snapshots().asyncExpand((profile) {
+    return Stream.fromFuture(_db.collection('users').doc(uid).get()).asyncExpand((profile) {
       final data = profile.data() ?? const <String, dynamic>{};
       if (data['isActive'] != true) return Stream.value(const <Asset>[]);
       if (data['role'] == 'admin') {
@@ -47,7 +47,6 @@ class AssetRepository {
       // would still request records outside the caller's authorization scope.
       return _assets
           .where('officeId', whereIn: officeIds)
-          .orderBy('brand')
           .snapshots()
           .map((snapshot) => snapshot.docs
               .map((doc) => Asset.fromMap(doc.id, doc.data()))
