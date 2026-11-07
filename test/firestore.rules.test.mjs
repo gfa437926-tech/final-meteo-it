@@ -133,7 +133,7 @@ test('users cannot elevate their own role', async () => {
 test('only a super administrator can provision another user profile', async () => {
   const managerDb = env.authenticatedContext('manager-1').firestore();
   await assertFails(setDoc(doc(managerDb, 'users', 'new-user'), {
-    role: 'it_manager', isActive: true, displayName: 'New User', officeIds: ['office-a'], email: 'new@example.com', officeIds: ['office-a'], createdAt: 1,
+    role: 'it_manager', isActive: true, displayName: 'New User', officeIds: ['office-a'], email: 'new@example.com', createdAt: 1,
   }));
 
   const adminDb = env.authenticatedContext('admin-1').firestore();
