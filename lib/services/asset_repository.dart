@@ -26,33 +26,48 @@ class AssetRepository {
     return _serials.doc(encoded);
   }
 
-  Stream<List<Asset>> watchAssets() {
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      watchAssetDocuments() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return Stream.value(const <Asset>[]);
-    return Stream.fromFuture(_db.collection('users').doc(uid).get()).asyncExpand((profile) {
+    if (uid == null) {
+      return Stream.value(
+        const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+      );
+    }
+    return Stream.fromFuture(_db.collection('users').doc(uid).get())
+        .asyncExpand((profile) {
       final data = profile.data() ?? const <String, dynamic>{};
-      if (data['isActive'] != true) return Stream.value(const <Asset>[]);
+      if (data['isActive'] != true) {
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
+      }
       if (data['role'] == 'admin') {
-        return _assets.orderBy('brand').snapshots().map((snapshot) =>
-            snapshot.docs.map((doc) => Asset.fromMap(doc.id, doc.data())).toList());
+        return _assets.orderBy('brand').snapshots().map((snapshot) => snapshot.docs);
       }
       final rawOfficeIds = data['officeIds'];
       final officeIds = rawOfficeIds is List
           ? rawOfficeIds.whereType<String>().toSet().toList()
           : <String>[];
       if (data['role'] != 'it_manager' || officeIds.isEmpty) {
-        return Stream.value(const <Asset>[]);
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
       }
       // The query itself is office constrained; client-side filtering alone
       // would still request records outside the caller's authorization scope.
       return _assets
           .where('officeId', whereIn: officeIds)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => Asset.fromMap(doc.id, doc.data()))
-              .toList());
+          .map((snapshot) => snapshot.docs);
     });
   }
+
+  Stream<List<Asset>> watchAssets() => watchAssetDocuments().map(
+        (documents) => documents
+            .map((document) => Asset.fromMap(document.id, document.data()))
+            .toList(),
+      );
 
   Future<void> createAsset(Asset asset) async {
     final serial = _normalizeSerial(asset.serialNumber);
