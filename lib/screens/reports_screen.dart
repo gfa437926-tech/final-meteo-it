@@ -248,7 +248,7 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('التقارير والجرد')),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        body: StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
           stream: _assetRepository.watchAssetDocuments(),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
@@ -258,7 +258,7 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
               return const Center(child: CircularProgressIndicator());
             }
 
-            final documents = snapshot.data!.docs.where((document) {
+            final documents = snapshot.data!.where((document) {
               final data = document.data();
               return (categoryFilter == null || data['category'] == categoryFilter) &&
                   (statusFilter == null || data['status'] == statusFilter) &&
@@ -281,7 +281,7 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                StreamBuilder<List<Office>>(
                   stream: _officeRepository.watchOffices(),
                   builder: (context, officeSnapshot) {
                     final offices = officeSnapshot.data ?? const <Office>[];
