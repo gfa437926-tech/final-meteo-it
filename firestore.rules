@@ -44,6 +44,11 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/offices/$(data.officeId)) &&
          get(/databases/$(database)/documents/offices/$(data.officeId)).data.isActive == true);
     }
+    function canAccessAssetId(assetId) {
+      return assetId is string &&
+        exists(/databases/$(database)/documents/assets/$(assetId)) &&
+        canReadAsset(get(/databases/$(database)/documents/assets/$(assetId)).data);
+    }
     function validOfficeIdAt(ids, index) {
       return ids.size() <= index ||
         (ids[index] is string &&
@@ -86,7 +91,7 @@ service cloud.firestore {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let assetId = resource.data.assetId;
       let assetAfter = getAfter(/databases/$(database)/documents/assets/$(assetId)).data;
-      return isAdmin() && (
+      return isAdmin() && canAccessAssetId(resource.data.assetId) && (
         (
           approvalBefore == 'pending' &&
           resource.data.status == 'active' &&
@@ -241,8 +246,9 @@ service cloud.firestore {
     }
 
     match /custody_cards/{cardId} {
-      allow read: if isActiveUser();
+      allow read: if canAccessAssetId(resource.data.assetId);
       allow create: if isAdmin() &&
+        canAccessAssetId(request.resource.data.assetId) &&
         request.resource.data.status == 'active' &&
         request.resource.data.approvalStatus == 'pending' &&
         getAfter(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.status == 'assigned';
@@ -251,14 +257,16 @@ service cloud.firestore {
     }
 
     match /asset_documents/{documentId} {
-      allow read: if isActiveUser();
-      allow create: if isAdmin();
+      allow read: if canAccessAssetId(resource.data.assetId);
+      allow create: if isAdmin() &&
+        canAccessAssetId(request.resource.data.assetId);
       allow update, delete: if false;
     }
 
     match /maintenance_parts/{usageId} {
-      allow read: if isActiveUser();
-      allow create: if isAdmin();
+      allow read: if canAccessAssetId(resource.data.assetId);
+      allow create: if isAdmin() &&
+        canAccessAssetId(request.resource.data.assetId);
       allow update, delete: if false;
     }
 
@@ -304,8 +312,12 @@ service cloud.firestore {
     }
 
     match /spare_parts/{partId} {
-      allow read: if isActiveUser();
-      allow create, update: if isAdmin();
+      // Office stock is isolated; legacy stock without officeId remains
+      // visible to the global administrator only.
+      allow read: if canReadAsset(resource.data);
+      allow create: if canWriteAsset(request.resource.data);
+      allow update: if canWriteAsset(resource.data) &&
+        canWriteAsset(request.resource.data);
       allow delete: if false;
     }
 
@@ -314,7 +326,7 @@ service cloud.firestore {
     // excluded until their own asset-to-office linkage is secured.
     match /{collection}/{document=**} {
       allow read: if isActiveUser() &&
-        collection in ['asset_categories', 'asset_models', 'custody_items'];
+        collection in ['asset_categories', 'asset_models'];
       allow create, update: if isAdmin() &&
         collection in ['asset_categories', 'asset_models', 'custody_items'];
       allow delete: if false;
