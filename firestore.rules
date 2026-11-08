@@ -445,7 +445,9 @@ service cloud.firestore {
         usage.maintenanceId is string && usage.assetId is string &&
         usage.officeId is string &&
         usage.quantity is int && usage.quantity > 0 &&
-        usage.unitCost is number && usage.unitCost >= 0 &&
+        ((usage.costAttributionComplete == true &&
+          usage.unitCost is number && usage.unitCost >= 0) ||
+         (usage.costAttributionComplete == false && usage.unitCost == null)) &&
         usage.totalCost is number && usage.totalCost >= 0 &&
         usage.notes is string && usage.usedAt is timestamp &&
         usage.createdBy == request.auth.uid &&
