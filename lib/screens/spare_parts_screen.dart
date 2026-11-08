@@ -286,6 +286,139 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     notes.dispose();
   }
 
+
+  Future<void> _showMovementHistory(QueryDocumentSnapshot<Map<String, dynamic>> part) async {
+    final data = part.data();
+    final officeId = data['officeId'] as String? ?? '';
+    try {
+      final db = FirebaseFirestore.instance;
+      final results = await Future.wait([
+        db.collection('spare_part_receipts')
+            .where('partId', isEqualTo: part.id)
+            .where('officeId', isEqualTo: officeId).get(),
+        db.collection('maintenance_parts')
+            .where('partId', isEqualTo: part.id)
+            .where('officeId', isEqualTo: officeId).get(),
+      ]);
+      if (!mounted) return;
+      final receipts = results[0].docs.map((doc) {
+        final value = doc.data();
+        return <String, dynamic>{
+          ...value, 'kind': 'توريد',
+          'eventAt': value['receivedAt'] ?? value['createdAt'],
+          'quantityDelta': (value['quantity'] as num?)?.toInt() ?? 0,
+        };
+      }).toList();
+      final issues = results[1].docs.map((doc) {
+        final value = doc.data();
+        return <String, dynamic>{
+          ...value, 'kind': 'صرف',
+          'eventAt': value['usedAt'],
+          'quantityDelta': -((value['quantity'] as num?)?.toInt() ?? 0),
+        };
+      }).toList();
+      final events = <Map<String, dynamic>>[...receipts, ...issues]
+        ..sort((a, b) {
+          DateTime dateOf(Map<String, dynamic> row) {
+            final value = row['eventAt'];
+            if (value is Timestamp) return value.toDate();
+            if (value is DateTime) return value;
+            return DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          return dateOf(b).compareTo(dateOf(a));
+        });
+      final received = receipts.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
+      final consumed = issues.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
+      final receivedCost = receipts.fold<double>(0, (sum, row) => sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+      final issuedCost = issues.fold<double>(0, (sum, row) => sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+      final closing = (data['quantity'] as num?)?.toInt() ?? 0;
+      final opening = closing - received + consumed;
+      final suppliers = receipts.map((row) => row['supplier'] as String? ?? '')
+          .where((name) => name.isNotEmpty).toSet().toList()..sort();
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('حركة المخزون • ${data['name'] ?? ''}'),
+          content: SizedBox(
+            width: 680,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    _historyMetric('الرصيد الافتتاحي', opening.toString()),
+                    _historyMetric('إجمالي الوارد', received.toString()),
+                    _historyMetric('إجمالي المنصرف', consumed.toString()),
+                    _historyMetric('الرصيد الحالي', closing.toString()),
+                    _historyMetric('تكلفة التوريد', receivedCost.toStringAsFixed(2)),
+                    _historyMetric('قيمة الصرف', issuedCost.toStringAsFixed(2)),
+                  ]),
+                  const SizedBox(height: 12),
+                  Text('الموردون: ${suppliers.isEmpty ? '—' : suppliers.join('، ')}'),
+                  const Divider(height: 24),
+                  if (events.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text('لا توجد حركات توريد أو صرف مسجلة لهذه القطعة.'),
+                    )
+                  else
+                    ...events.map((event) {
+                      final rawDate = event['eventAt'];
+                      final date = rawDate is Timestamp ? rawDate.toDate() :
+                          rawDate is DateTime ? rawDate : null;
+                      final qty = (event['quantity'] as num?)?.toInt() ?? 0;
+                      final cost = (event['totalCost'] as num?)?.toDouble() ?? 0;
+                      final actor = event['createdBy'] as String? ?? '';
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(event['kind'] == 'توريد'
+                            ? Icons.call_received : Icons.call_made),
+                        title: Text('${event['kind']} • ${event['supplier'] ?? event['partName'] ?? 'قطعة غيار'}'),
+                        subtitle: Text('${date?.toLocal().toString().split('.').first ?? 'تاريخ غير متاح'} • المنفذ: ${actor.isEmpty ? 'مسجل في طلب الصيانة' : actor}'),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('${event['kind'] == 'توريد' ? '+' : '−'}$qty'),
+                            Text(cost.toStringAsFixed(2), style: Theme.of(ctx).textTheme.bodySmall),
+                          ],
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 8),
+                  const Text('السجلات الأصلية محفوظة للقراءة فقط؛ لا يمكن تعديلها أو حذفها من التطبيق.',
+                      style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تحميل سجل الحركة: $error')),
+        );
+      }
+    }
+  }
+
+  Widget _historyMetric(String label, String value) => Container(
+    constraints: const BoxConstraints(minWidth: 145),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 4),
+      Text(value, style: Theme.of(context).textTheme.titleMedium),
+    ]),
+  );
+
   Widget _field(TextEditingController controller, String label,
       {bool numeric = false, bool required = true}) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -357,6 +490,11 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                     trailing: Wrap(
                       spacing: 6,
                       children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _showMovementHistory(part),
+                          icon: const Icon(Icons.history, size: 18),
+                          label: const Text('الحركة'),
+                        ),
                         OutlinedButton.icon(
                           onPressed: () => _restock(part),
                           icon: const Icon(Icons.add_box_outlined, size: 18),
