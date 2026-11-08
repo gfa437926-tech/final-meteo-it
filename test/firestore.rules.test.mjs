@@ -14,6 +14,7 @@ import {
   collection,
   query,
   where,
+  orderBy,
   runTransaction,
   setDoc,
   updateDoc,
@@ -843,6 +844,7 @@ test('spare stock is office-scoped and managers cannot forge stock office assign
   await assertFails(getDocs(collection(managerA, 'spare_parts')));
   await assertSucceeds(getDocs(query(
     collection(managerA, 'spare_parts'), where('officeId', '==', 'office-a'),
+    orderBy('name'),
   )));
   await assertSucceeds(getDocs(collection(admin, 'spare_parts')));
 
@@ -957,4 +959,33 @@ test('spare usage cannot connect a part, maintenance ticket and asset across off
       notes: '', usedAt: new Date(),
     });
   }));
+});
+
+
+test('office-scoped inventory and open maintenance queries used by the UI are authorized', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
+    await setDoc(doc(db, 'maintenance_records', 'query-maintenance-a'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'Office A open ticket',
+      status: 'open', reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'spare_parts', 'query-part-a'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-Q',
+      quantity: 5, minimumQuantity: 1, unitCost: 10,
+      supplier: '', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+
+  await assertSucceeds(getDocs(query(
+    collection(manager, 'spare_parts'),
+    where('officeId', 'in', ['office-a']),
+    orderBy('name'),
+  )));
+  await assertSucceeds(getDocs(query(
+    collection(manager, 'maintenance_records'),
+    where('status', 'in', ['open', 'inProgress']),
+    where('officeId', 'in', ['office-a']),
+  )));
 });
