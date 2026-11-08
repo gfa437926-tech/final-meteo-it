@@ -108,7 +108,6 @@ class SparePartsRepository {
         'quantity': quantity,
         'minimumQuantity': minimumQuantity,
         'unitCost': unitCost,
-        'minimumQuantity': minimumQuantity,
         'supplier': supplier.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
