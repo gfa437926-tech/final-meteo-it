@@ -139,8 +139,16 @@ class SparePartsRepository {
       while (true) {
         final pageQuery = cursor == null ? query : query.startAfterDocument(cursor);
         final page = await pageQuery.get();
-        for (final doc in page.docs) {
+        final allocationSnapshots = incoming
+            ? <DocumentSnapshot<Map<String, dynamic>>>[]
+            : await Future.wait(page.docs.map((doc) =>
+                db.collection('spare_part_allocations').doc(doc.id).get()));
+        for (var index = 0; index < page.docs.length; index++) {
+          final doc = page.docs[index];
           final data = doc.data();
+          final allocationData = incoming
+              ? null
+              : allocationSnapshots[index].data();
           final rawDate = data[dateField];
           final eventDate = rawDate is Timestamp ? rawDate.toDate() :
               rawDate is DateTime ? rawDate : null;
@@ -153,6 +161,10 @@ class SparePartsRepository {
             'quantity': (data['quantity'] as num?)?.toInt() ?? 0,
             'totalCost': (data['totalCost'] as num?)?.toDouble() ?? 0,
             'isIncoming': incoming,
+            'allocationLines': allocationData?['lines'] is List
+                ? allocationData!['lines'] as List
+                : const <dynamic>[],
+            'costAttributionComplete': data['costAttributionComplete'] == true,
           });
         }
         if (page.docs.length < 500) break;
