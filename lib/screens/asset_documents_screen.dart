@@ -202,6 +202,7 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                   stream: FirebaseFirestore.instance
                       .collection('purchase_records')
                       .where('assetId', isEqualTo: selectedAssetId)
+                      .where('officeId', isEqualTo: selectedAssetOfficeId)
                       .snapshots(),
                   builder: (context, snapshot) {
                     final purchases = snapshot.data?.docs ?? [];
@@ -233,10 +234,8 @@ class _AssetDocumentsScreenState extends State<AssetDocumentsScreen> {
                   : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('asset_documents')
-                          .where(
-                            selectedAssetOfficeId == null ? 'assetId' : 'officeId',
-                            isEqualTo: selectedAssetOfficeId ?? selectedAssetId,
-                          )
+                          .where('assetId', isEqualTo: selectedAssetId)
+                          .where('officeId', isEqualTo: selectedAssetOfficeId)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) return Center(child: Text('تعذر تحميل المستندات: ${snapshot.error}'));
