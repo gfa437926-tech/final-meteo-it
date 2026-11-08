@@ -832,6 +832,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         }
       }
       final suppliers = supplierSet.toList()..sort();
+      if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
