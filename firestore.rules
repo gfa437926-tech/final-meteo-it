@@ -610,7 +610,9 @@ service cloud.firestore {
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
       let usage = getAfter(usagePath).data;
       let partPath = /databases/$(database)/documents/spare_parts/$(usage.partId);
-      return usageId is string && existsAfter(usagePath) &&
+      return usageId is string && !exists(usagePath) && existsAfter(usagePath) &&
+        request.resource.data.lastPartsUsageId !=
+          resource.data.get('lastPartsUsageId', null) &&
         request.resource.data.assetId == resource.data.assetId &&
         request.resource.data.officeId == resource.data.officeId &&
         request.resource.data.status == resource.data.status &&
