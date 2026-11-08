@@ -46,7 +46,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
-                  value: selectedOfficeId,
+                  initialValue: selectedOfficeId,
                   decoration: const InputDecoration(labelText: 'المكتب'),
                   items: offices.map((office) => DropdownMenuItem(
                     value: office.id, child: Text(office.name),
