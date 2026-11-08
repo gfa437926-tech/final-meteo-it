@@ -401,9 +401,13 @@ service cloud.firestore {
         validAllocationLine(lines, 1, usageId, usage);
     }
     function validAllocationBatch(usageId, usage) {
+      let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
       let allocation = getAfter(allocationPath).data;
-      return usage.allocationId == usageId &&
+      // A stock issue and its allocation are one-time events. Existing immutable
+      // records must never authorize a second stock/cost mutation.
+      return !exists(usagePath) && !exists(allocationPath) &&
+        usage.allocationId == usageId &&
         usage.allocationCount is int &&
         usage.allocationCount >= 1 && usage.allocationCount <= 2 &&
         usage.legacyQuantity is int &&
@@ -463,7 +467,11 @@ service cloud.firestore {
       let receipt = getAfter(receiptPath).data;
       let lot = getAfter(lotPath).data;
       let oldUntracked = resource.data.get('untrackedQuantity', resource.data.quantity);
-      return restockId is string && existsAfter(receiptPath) &&
+      // A receipt, lot and balance are consumed as a create-only bundle; an
+      // existing receipt cannot be replayed to inflate stock a second time.
+      return restockId is string &&
+        !exists(receiptPath) && !exists(lotPath) && !exists(balancePath) &&
+        existsAfter(receiptPath) &&
         existsAfter(lotPath) && existsAfter(balancePath) &&
         request.resource.data.officeId == resource.data.officeId &&
         receipt.keys().hasAll([
@@ -783,11 +791,18 @@ service cloud.firestore {
       let allocationId = request.resource.data.get('lastAllocationId', null);
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(allocationId);
       let allocation = getAfter(allocationPath).data;
+      let partPath = /databases/$(database)/documents/spare_parts/$(resource.data.partId);
+      let ticketPath = /databases/$(database)/documents/maintenance_records/$(allocation.maintenanceId);
       let issuedQuantity = resource.data.remainingQuantity -
         request.resource.data.remainingQuantity;
       return allocationId is string &&
         allocationId != resource.data.get('lastAllocationId', null) &&
+        !exists(allocationPath) &&
         existsAfter(allocationPath) &&
+        existsAfter(partPath) && existsAfter(ticketPath) &&
+        getAfter(partPath).data.get('lastUsageId', null) == allocationId &&
+        getAfter(ticketPath).data.get('lastPartsUsageId', null) == allocationId &&
+        getAfter(ticketPath).data.officeId == resource.data.officeId &&
         request.resource.data.lotId == resource.data.lotId &&
         request.resource.data.partId == resource.data.partId &&
         request.resource.data.officeId == resource.data.officeId &&
