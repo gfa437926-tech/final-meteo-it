@@ -74,12 +74,12 @@ beforeEach(async () => {
       brand: 'Legacy', model: 'Unassigned', status: 'available',
     });
     await setDoc(doc(db, 'custody_cards', 'card-2'), {
-      assetId: 'asset-2', assetLabel: 'Lenovo ThinkCentre',
+      assetId: 'asset-2', officeId: 'office-a', assetLabel: 'Lenovo ThinkCentre',
       employeeName: 'Test Employee', officeName: 'Office A',
       status: 'active', approvalStatus: 'pending',
     });
     await setDoc(doc(db, 'custody_cards', 'card-b'), {
-      assetId: 'asset-b', assetLabel: 'HP ProDesk',
+      assetId: 'asset-b', officeId: 'office-b', assetLabel: 'HP ProDesk',
       employeeName: 'Office B Employee', officeName: 'Office B',
       status: 'active', approvalStatus: 'pending',
     });
@@ -625,6 +625,31 @@ test('a transfer requires access to both the source and destination offices', as
   }));
 });
 
+
+test('custody cards are office-scoped and legacy cards without officeId are admin-only', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'custody_cards', 'legacy-card'), {
+      assetId: 'legacy-asset', employeeName: 'Legacy employee',
+      officeName: 'Unknown', status: 'active',
+    });
+  });
+  await assertSucceeds(getDocs(query(
+    collection(managerA, 'custody_cards'), where('officeId', '==', 'office-a'),
+  )));
+  await assertFails(getDocs(collection(managerA, 'custody_cards')));
+  await assertFails(getDoc(doc(managerA, 'custody_cards', 'card-b')));
+  await assertSucceeds(getDoc(doc(managerB, 'custody_cards', 'card-b')));
+  await assertFails(getDoc(doc(managerA, 'custody_cards', 'legacy-card')));
+  await assertSucceeds(getDoc(doc(admin, 'custody_cards', 'legacy-card')));
+  await assertFails(setDoc(doc(managerA, 'custody_cards', 'forged-office-card'), {
+    assetId: 'asset-1', officeId: 'office-b', assetLabel: 'Forged',
+    employeeName: 'X', officeName: 'Office A', assignedAt: new Date().toISOString(),
+    status: 'active', approvalStatus: 'pending',
+  }));
+});
 
 test('custody cards and Firestore attachment metadata follow the linked asset office', async () => {
   const managerA = env.authenticatedContext('manager-1').firestore();
