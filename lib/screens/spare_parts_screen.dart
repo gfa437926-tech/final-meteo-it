@@ -309,6 +309,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     }
     final labels = suppliers.toList()..sort();
     if (hasLegacy) labels.add('رصيد تاريخي غير منسوب');
+    if (labels.isEmpty) return 'قديم غير منسوب';
     return labels.join('، ');
   }
 
