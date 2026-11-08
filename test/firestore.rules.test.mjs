@@ -584,6 +584,9 @@ test('movement records must match the linked asset before and after the transact
     assetId: 'asset-1', officeId: 'office-a',
     movementType: 'maintenance_note', occurredAt: new Date(),
   }));
+  await assertFails(setDoc(doc(manager, 'asset_movements', 'missing-office-id'), {
+    assetId: 'asset-1', movementType: 'forged', occurredAt: new Date(),
+  }));
   await assertFails(setDoc(doc(manager, 'asset_movements', 'forged-asset-movement'), {
     assetId: 'asset-b', officeId: 'office-a',
     movementType: 'forged', occurredAt: new Date(),
