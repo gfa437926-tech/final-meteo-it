@@ -24,7 +24,7 @@ try {
     balances: balanceSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
   });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
-  if (!plan.safeToApply) process.exitCode = 2;
+  if (!plan.reconciliationPassed) process.exitCode = 2;
 } finally {
   await deleteApp(app);
 }
