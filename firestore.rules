@@ -776,10 +776,18 @@ service cloud.firestore {
         getAfter(lotPath).data.receivedQuantity == data.remainingQuantity &&
         hasOfficeAccess(data.officeId);
     }
+    function allocationContainsLotLine(lines, index, lotId, quantity) {
+      return lines.size() > index &&
+        lines[index].sourceType == 'lot' &&
+        lines[index].lotId == lotId &&
+        lines[index].quantity == quantity;
+    }
     function validSparePartLotBalanceUpdate(lotId) {
       let allocationId = request.resource.data.get('lastAllocationId', null);
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(allocationId);
       let allocation = getAfter(allocationPath).data;
+      let issuedQuantity = resource.data.remainingQuantity -
+        request.resource.data.remainingQuantity;
       return allocationId is string && existsAfter(allocationPath) &&
         request.resource.data.lotId == resource.data.lotId &&
         request.resource.data.partId == resource.data.partId &&
@@ -793,17 +801,11 @@ service cloud.firestore {
         allocation.usageId == allocationId &&
         allocation.partId == resource.data.partId &&
         allocation.officeId == resource.data.officeId &&
-        allocation.lines.hasAny([{
-          'sourceType': 'lot',
-          'lotId': lotId,
-          'receiptId': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.receiptId,
-          'supplier': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.supplier,
-          'quantity': resource.data.remainingQuantity - request.resource.data.remainingQuantity,
-          'unitCost': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.unitCost,
-          'totalCost': (resource.data.remainingQuantity - request.resource.data.remainingQuantity) *
-            get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.unitCost
-        }]) &&
-        hasOfficeAccess(resource.data.officeId);
+        (allocationContainsLotLine(allocation.lines, 0, lotId, issuedQuantity) ||
+         allocationContainsLotLine(allocation.lines, 1, lotId, issuedQuantity) ||
+         allocationContainsLotLine(allocation.lines, 2, lotId, issuedQuantity) ||
+         allocationContainsLotLine(allocation.lines, 3, lotId, issuedQuantity) ||
+         allocationContainsLotLine(allocation.lines, 4, lotId, issuedQuantity));
     }
     function validSparePartAllocationCreate(allocationId, data) {
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(allocationId);
@@ -825,8 +827,7 @@ service cloud.firestore {
         getAfter(usagePath).data.quantity == data.quantity &&
         getAfter(usagePath).data.totalCost == data.totalCost &&
         getAfter(usagePath).data.createdBy == data.createdBy &&
-        data.createdBy == request.auth.uid &&
-        hasOfficeAccess(data.officeId);
+        data.createdBy == request.auth.uid;
     }
 
     match /spare_parts/{partId} {
