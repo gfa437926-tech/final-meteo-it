@@ -859,82 +859,59 @@ test('spare stock is office-scoped and managers cannot forge stock office assign
   }));
 });
 
-test('spare part consumption requires one atomic stock, maintenance cost and usage transaction', async () => {
+test('clients cannot directly mutate stock, maintenance cost, usage or FIFO balances', async () => {
   const manager = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
-    await setDoc(doc(db, 'maintenance_records', 'parts-maintenance-a'), {
+    await setDoc(doc(db, 'maintenance_records', 'server-only-ticket'), {
       assetId: 'asset-1', officeId: 'office-a', title: 'Repair',
       status: 'open', previousAssetStatus: 'available',
       partsCost: 0, reportedAt: new Date(),
     });
-    await setDoc(doc(db, 'spare_parts', 'parts-part-a'), {
-      officeId: 'office-a', name: 'SSD', sku: 'SSD-1',
-      quantity: 10, minimumQuantity: 2, unitCost: 5,
-      supplier: 'Supplier', createdAt: new Date(), updatedAt: new Date(),
+    await setDoc(doc(db, 'spare_parts', 'server-only-part'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-SERVER',
+      quantity: 10, untrackedQuantity: 10, minimumQuantity: 1,
+      unitCost: 5, supplier: '', createdAt: new Date(), updatedAt: new Date(),
+    });
+    await setDoc(doc(db, 'spare_part_lots', 'server-only-lot'), {
+      partId: 'server-only-part', officeId: 'office-a',
+      receiptId: 'server-only-receipt', supplier: 'Supplier',
+      receivedQuantity: 5, unitCost: 5, totalCost: 25,
+      receivedAt: new Date(), createdAt: new Date(), createdBy: 'manager-1',
+    });
+    await setDoc(doc(db, 'spare_part_lot_balances', 'server-only-lot'), {
+      lotId: 'server-only-lot', partId: 'server-only-part',
+      officeId: 'office-a', remainingQuantity: 5,
+      createdAt: new Date(), updatedAt: new Date(), lastAllocationId: null,
     });
   });
 
-  // None of the three legs may be written independently.
-  await assertFails(updateDoc(doc(manager, 'spare_parts', 'parts-part-a'), {
-    quantity: 8, updatedAt: new Date(),
+  await assertFails(updateDoc(doc(manager, 'spare_parts', 'server-only-part'), {
+    quantity: 9, untrackedQuantity: 9, lastUsageId: 'forged-usage',
+    updatedAt: new Date(),
   }));
-  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'parts-maintenance-a'), {
-    partsCost: 10, updatedAt: new Date(), lastPartsUsageId: 'usage-cost-only',
+  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'server-only-ticket'), {
+    partsCost: 5, lastPartsUsageId: 'forged-usage', updatedAt: new Date(),
   }));
-  await assertFails(setDoc(doc(manager, 'maintenance_parts', 'usage-only'), {
-    partId: 'parts-part-a', partName: 'SSD',
-    maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
-    officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
+  await assertFails(setDoc(doc(manager, 'maintenance_parts', 'forged-usage'), {
+    partId: 'server-only-part', partName: 'SSD',
+    maintenanceId: 'server-only-ticket', assetId: 'asset-1',
+    officeId: 'office-a', quantity: 1, unitCost: 5, totalCost: 5,
     notes: '', usedAt: new Date(), createdBy: 'manager-1',
   }));
-
-  await assertSucceeds(runTransaction(manager, async (tx) => {
-    const partRef = doc(manager, 'spare_parts', 'parts-part-a');
-    const ticketRef = doc(manager, 'maintenance_records', 'parts-maintenance-a');
-    const assetRef = doc(manager, 'assets', 'asset-1');
-    const usageRef = doc(manager, 'maintenance_parts', 'usage-valid');
-    const allocationRef = doc(manager, 'spare_part_allocations', 'usage-valid');
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const asset = await tx.get(assetRef);
-    assert.equal(part.data().quantity, 10);
-    assert.equal(ticket.data().partsCost, 0);
-    assert.equal(asset.data().officeId, 'office-a');
-    tx.update(partRef, {
-      quantity: 8, untrackedQuantity: 8,
-      lastUsageId: 'usage-valid', updatedAt: new Date(),
-    });
-    tx.update(ticketRef, {
-      partsCost: 0, lastPartsUsageId: 'usage-valid', updatedAt: new Date(),
-    });
-    tx.set(usageRef, {
-      partId: 'parts-part-a', partName: 'SSD',
-      maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 2, unitCost: null, totalCost: 0,
-      notes: 'Replacement', usedAt: new Date(), createdBy: 'manager-1',
-      allocationId: 'usage-valid', allocationCount: 1, legacyQuantity: 2,
-      costAttributionComplete: false,
-    });
-    tx.set(allocationRef, {
-      usageId: 'usage-valid', partId: 'parts-part-a',
-      officeId: 'office-a', maintenanceId: 'parts-maintenance-a',
-      assetId: 'asset-1', quantity: 2, totalCost: 0,
-      lines: [{
-        sourceType: 'legacy_untracked', lotId: null, receiptId: null,
-        supplier: null, quantity: 2, unitCost: null, totalCost: null,
-      }],
-      createdAt: new Date(), createdBy: 'manager-1',
-    });
+  await assertFails(updateDoc(doc(manager, 'spare_part_lot_balances', 'server-only-lot'), {
+    remainingQuantity: 4, updatedAt: new Date(), lastAllocationId: 'forged-usage',
   }));
-
-  const partAfter = await getDoc(doc(manager, 'spare_parts', 'parts-part-a'));
-  const ticketAfter = await getDoc(doc(manager, 'maintenance_records', 'parts-maintenance-a'));
-  assert.equal(partAfter.data().quantity, 8);
-  assert.equal(ticketAfter.data().partsCost, 0);
+  await assertFails(setDoc(doc(manager, 'spare_part_allocations', 'forged-usage'), {
+    usageId: 'forged-usage', partId: 'server-only-part',
+    officeId: 'office-a', maintenanceId: 'server-only-ticket',
+    assetId: 'asset-1', quantity: 1, totalCost: 5,
+    lines: [], createdAt: new Date(), createdBy: 'manager-1',
+  }));
+  assert.equal((await getDoc(doc(manager, 'spare_parts', 'server-only-part'))).data().quantity, 10);
+  assert.equal((await getDoc(doc(manager, 'maintenance_records', 'server-only-ticket'))).data().partsCost, 0);
 });
-
 test('spare usage cannot connect a part, maintenance ticket and asset across offices', async () => {
   const managerA = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -1128,347 +1105,48 @@ test('spare part movement reads are office-scoped and usage events are immutable
 });
 
 
-test('FIFO allocations consume legacy stock first and then the oldest supplier lot', async () => {
-  const managerA = env.authenticatedContext('manager-1').firestore();
-  const managerB = env.authenticatedContext('manager-b').firestore();
-  await env.withSecurityRulesDisabled(async (ctx) => {
-    const db = ctx.firestore();
-    await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
-    await setDoc(doc(db, 'maintenance_records', 'fifo-ticket'), {
-      assetId: 'asset-1', officeId: 'office-a', title: 'FIFO repair',
-      status: 'open', partsCost: 0, reportedAt: new Date(),
-    });
-    await setDoc(doc(db, 'spare_parts', 'fifo-part'), {
-      officeId: 'office-a', name: 'SSD', sku: 'SSD-FIFO',
-      quantity: 12, untrackedQuantity: 2, minimumQuantity: 1,
-      unitCost: 20, supplier: 'Latest supplier',
-      createdAt: new Date(), updatedAt: new Date(),
-    });
-    const now = new Date();
-    await setDoc(doc(db, 'spare_part_receipts', 'fifo-receipt-1'), {
-      partId: 'fifo-part', officeId: 'office-a', lotId: 'fifo-lot-1',
-      quantity: 5, quantityBefore: 2, quantityAfter: 7,
-      unitCost: 10, totalCost: 50, supplier: 'Supplier A',
-      notes: '', receivedAt: new Date('2026-01-01T00:00:00Z'),
-      createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lots', 'fifo-lot-1'), {
-      partId: 'fifo-part', officeId: 'office-a', receiptId: 'fifo-receipt-1',
-      supplier: 'Supplier A', receivedQuantity: 5, unitCost: 10,
-      totalCost: 50, receivedAt: new Date('2026-01-01T00:00:00Z'),
-      createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lot_balances', 'fifo-lot-1'), {
-      lotId: 'fifo-lot-1', partId: 'fifo-part', officeId: 'office-a',
-      remainingQuantity: 5, createdAt: now, updatedAt: now,
-      lastAllocationId: null,
-    });
-    await setDoc(doc(db, 'spare_part_receipts', 'fifo-receipt-2'), {
-      partId: 'fifo-part', officeId: 'office-a', lotId: 'fifo-lot-2',
-      quantity: 5, quantityBefore: 7, quantityAfter: 12,
-      unitCost: 20, totalCost: 100, supplier: 'Supplier B',
-      notes: '', receivedAt: new Date('2026-02-01T00:00:00Z'),
-      createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lots', 'fifo-lot-2'), {
-      partId: 'fifo-part', officeId: 'office-a', receiptId: 'fifo-receipt-2',
-      supplier: 'Supplier B', receivedQuantity: 5, unitCost: 20,
-      totalCost: 100, receivedAt: new Date('2026-02-01T00:00:00Z'),
-      createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lot_balances', 'fifo-lot-2'), {
-      lotId: 'fifo-lot-2', partId: 'fifo-part', officeId: 'office-a',
-      remainingQuantity: 5, createdAt: now, updatedAt: now,
-      lastAllocationId: null,
-    });
-  });
-
-  // First issue: consume the untracked opening balance, then FIFO lot 1.
-  await assertSucceeds(runTransaction(managerA, async (tx) => {
-    const partRef = doc(managerA, 'spare_parts', 'fifo-part');
-    const ticketRef = doc(managerA, 'maintenance_records', 'fifo-ticket');
-    const lotBalanceRef = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-1');
-    const usageRef = doc(managerA, 'maintenance_parts', 'fifo-usage-1');
-    const allocationRef = doc(managerA, 'spare_part_allocations', 'fifo-usage-1');
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const lotBalance = await tx.get(lotBalanceRef);
-    assert.equal(part.data().quantity, 12);
-    assert.equal(part.data().untrackedQuantity, 2);
-    assert.equal(lotBalance.data().remainingQuantity, 5);
-    const now = new Date();
-    tx.update(partRef, {
-      quantity: 5, untrackedQuantity: 0,
-      lastUsageId: 'fifo-usage-1', updatedAt: now,
-    });
-    tx.update(ticketRef, {
-      partsCost: 50, lastPartsUsageId: 'fifo-usage-1', updatedAt: now,
-    });
-    tx.update(lotBalanceRef, {
-      remainingQuantity: 0, updatedAt: now, lastAllocationId: 'fifo-usage-1',
-    });
-    tx.set(usageRef, {
-      partId: 'fifo-part', partName: 'SSD',
-      maintenanceId: 'fifo-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 7, unitCost: null, totalCost: 50,
-      notes: 'Legacy + first FIFO lot', usedAt: now, createdBy: 'manager-1',
-      allocationId: 'fifo-usage-1', allocationCount: 2,
-      legacyQuantity: 2, costAttributionComplete: false,
-    });
-    tx.set(allocationRef, {
-      usageId: 'fifo-usage-1', partId: 'fifo-part',
-      officeId: 'office-a', maintenanceId: 'fifo-ticket',
-      assetId: 'asset-1', quantity: 7, totalCost: 50,
-      lines: [
-        {
-          sourceType: 'legacy_untracked', lotId: null, receiptId: null,
-          supplier: null, quantity: 2, unitCost: null, totalCost: null,
-        },
-        {
-          sourceType: 'lot', lotId: 'fifo-lot-1', receiptId: 'fifo-receipt-1',
-          supplier: 'Supplier A', quantity: 5, unitCost: 10, totalCost: 50,
-        },
-      ],
-      createdAt: now, createdBy: 'manager-1',
-    });
-  }));
-
-  // Second issue: FIFO proceeds to lot 2 only after lot 1 is exhausted.
-  await assertSucceeds(runTransaction(managerA, async (tx) => {
-    const partRef = doc(managerA, 'spare_parts', 'fifo-part');
-    const ticketRef = doc(managerA, 'maintenance_records', 'fifo-ticket');
-    const lotBalanceRef = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2');
-    const usageRef = doc(managerA, 'maintenance_parts', 'fifo-usage-2');
-    const allocationRef = doc(managerA, 'spare_part_allocations', 'fifo-usage-2');
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const lotBalance = await tx.get(lotBalanceRef);
-    assert.equal(part.data().quantity, 5);
-    assert.equal(lotBalance.data().remainingQuantity, 5);
-    const now = new Date();
-    tx.update(partRef, {
-      quantity: 4, untrackedQuantity: 0,
-      lastUsageId: 'fifo-usage-2', updatedAt: now,
-    });
-    tx.update(ticketRef, {
-      partsCost: 70, lastPartsUsageId: 'fifo-usage-2', updatedAt: now,
-    });
-    tx.update(lotBalanceRef, {
-      remainingQuantity: 4, updatedAt: now, lastAllocationId: 'fifo-usage-2',
-    });
-    tx.set(usageRef, {
-      partId: 'fifo-part', partName: 'SSD',
-      maintenanceId: 'fifo-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 1, unitCost: 20, totalCost: 20,
-      notes: 'Second FIFO lot', usedAt: now, createdBy: 'manager-1',
-      allocationId: 'fifo-usage-2', allocationCount: 1,
-      legacyQuantity: 0, costAttributionComplete: true,
-    });
-    tx.set(allocationRef, {
-      usageId: 'fifo-usage-2', partId: 'fifo-part',
-      officeId: 'office-a', maintenanceId: 'fifo-ticket',
-      assetId: 'asset-1', quantity: 1, totalCost: 20,
-      lines: [{
-        sourceType: 'lot', lotId: 'fifo-lot-2', receiptId: 'fifo-receipt-2',
-        supplier: 'Supplier B', quantity: 1, unitCost: 20, totalCost: 20,
-      }],
-      createdAt: now, createdBy: 'manager-1',
-    });
-  }));
-
-  const partAfter = await getDoc(doc(managerA, 'spare_parts', 'fifo-part'));
-  const ticketAfter = await getDoc(doc(managerA, 'maintenance_records', 'fifo-ticket'));
-  const lot1After = await getDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-1'));
-  const lot2After = await getDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2'));
-  const firstAllocation = await getDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1'));
-  const secondAllocation = await getDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-2'));
-  assert.equal(partAfter.data().quantity, 4);
-  assert.equal(partAfter.data().untrackedQuantity, 0);
-  assert.equal(ticketAfter.data().partsCost, 70);
-  assert.equal(lot1After.data().remainingQuantity, 0);
-  assert.equal(lot2After.data().remainingQuantity, 4);
-  assert.equal(firstAllocation.data().lines[0].supplier, null);
-  assert.equal(firstAllocation.data().lines[1].supplier, 'Supplier A');
-  assert.equal(secondAllocation.data().lines[0].supplier, 'Supplier B');
-
-  await assertFails(updateDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1'), {
-    totalCost: 700,
-  }));
-  await assertFails(deleteDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1')));
-  await assertFails(updateDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2'), {
-    remainingQuantity: 99,
-  }));
-  await assertFails(getDoc(doc(managerB, 'spare_part_allocations', 'fifo-usage-1')));
-  await assertFails(getDoc(doc(managerB, 'spare_part_lots', 'fifo-lot-1')));
-});
-
-test('immutable FIFO usage and allocation documents cannot be replayed to consume stock twice', async () => {
+test('client cannot choose a non-FIFO lot or replay server-owned allocation records', async () => {
   const manager = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
-    await setDoc(doc(db, 'maintenance_records', 'replay-ticket'), {
-      assetId: 'asset-1', officeId: 'office-a', title: 'Replay protection',
-      status: 'open', partsCost: 0, reportedAt: new Date(),
+    await setDoc(doc(db, 'maintenance_records', 'fifo-server-ticket'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'FIFO repair',
+      status: 'open', partsCost: 0,
     });
-    await setDoc(doc(db, 'spare_parts', 'replay-part'), {
-      officeId: 'office-a', name: 'SSD', sku: 'SSD-REPLAY',
+    await setDoc(doc(db, 'spare_parts', 'fifo-server-part'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-FIFO',
       quantity: 10, untrackedQuantity: 0, minimumQuantity: 1,
-      unitCost: 10, supplier: 'Replay Supplier',
+      unitCost: 20, supplier: 'Newest supplier',
       createdAt: new Date(), updatedAt: new Date(),
     });
-    const now = new Date();
-    await setDoc(doc(db, 'spare_part_receipts', 'replay-receipt'), {
-      partId: 'replay-part', officeId: 'office-a', lotId: 'replay-lot',
-      quantity: 10, quantityBefore: 0, quantityAfter: 10,
-      unitCost: 10, totalCost: 100, supplier: 'Replay Supplier',
-      notes: '', receivedAt: now, createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lots', 'replay-lot'), {
-      partId: 'replay-part', officeId: 'office-a',
-      receiptId: 'replay-receipt', supplier: 'Replay Supplier',
-      receivedQuantity: 10, unitCost: 10, totalCost: 100,
-      receivedAt: now, createdAt: now, createdBy: 'manager-1',
-    });
-    await setDoc(doc(db, 'spare_part_lot_balances', 'replay-lot'), {
-      lotId: 'replay-lot', partId: 'replay-part', officeId: 'office-a',
-      remainingQuantity: 10, createdAt: now, updatedAt: now,
-      lastAllocationId: null,
+    await setDoc(doc(db, 'spare_part_lot_balances', 'fifo-server-lot-old'), {
+      lotId: 'fifo-server-lot-old', partId: 'fifo-server-part',
+      officeId: 'office-a', remainingQuantity: 5,
+      createdAt: new Date(), updatedAt: new Date(), lastAllocationId: null,
     });
   });
 
-  const issue = async (usageId, quantity) => assertSucceeds(runTransaction(manager, async (tx) => {
-    const partRef = doc(manager, 'spare_parts', 'replay-part');
-    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
-    const balanceRef = doc(manager, 'spare_part_lot_balances', 'replay-lot');
-    const usageRef = doc(manager, 'maintenance_parts', usageId);
-    const allocationRef = doc(manager, 'spare_part_allocations', usageId);
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const balance = await tx.get(balanceRef);
-    const totalCost = quantity * 10;
-    const now = new Date();
-    tx.update(partRef, {
-      quantity: part.data().quantity - quantity,
-      untrackedQuantity: 0,
-      lastUsageId: usageId,
-      updatedAt: now,
-    });
-    tx.update(ticketRef, {
-      partsCost: ticket.data().partsCost + totalCost,
-      lastPartsUsageId: usageId,
-      updatedAt: now,
-    });
-    tx.update(balanceRef, {
-      remainingQuantity: balance.data().remainingQuantity - quantity,
-      updatedAt: now,
-      lastAllocationId: usageId,
-    });
-    tx.set(usageRef, {
-      partId: 'replay-part', partName: 'SSD',
-      maintenanceId: 'replay-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity, unitCost: 10, totalCost,
-      notes: '', usedAt: now, createdBy: 'manager-1',
-      allocationId: usageId, allocationCount: 1,
-      legacyQuantity: 0, costAttributionComplete: true,
-    });
-    tx.set(allocationRef, {
-      usageId, partId: 'replay-part', officeId: 'office-a',
-      maintenanceId: 'replay-ticket', assetId: 'asset-1',
-      quantity, totalCost,
-      lines: [{
-        sourceType: 'lot', lotId: 'replay-lot', receiptId: 'replay-receipt',
-        supplier: 'Replay Supplier', quantity, unitCost: 10, totalCost,
-      }],
-      createdAt: now, createdBy: 'manager-1',
-    });
+  // Direct writes are denied even when the client supplies internally consistent
+  // values. The callable function owns FIFO selection and the entire write set.
+  await assertFails(updateDoc(doc(manager, 'spare_part_lot_balances', 'fifo-server-lot-old'), {
+    remainingQuantity: 0, updatedAt: new Date(), lastAllocationId: 'forged-fifo',
   }));
-
-  await issue('replay-usage-1', 2);
-  await issue('replay-usage-2', 1);
-
-  // A new allocation cannot claim a lot deduction unless the balance changes
-  // by the exact quantity in the same atomic transaction.
-  await assertFails(runTransaction(manager, async (tx) => {
-    const partRef = doc(manager, 'spare_parts', 'replay-part');
-    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
-    const usageRef = doc(manager, 'maintenance_parts', 'replay-usage-forged');
-    const allocationRef = doc(manager, 'spare_part_allocations', 'replay-usage-forged');
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const totalCost = 10;
-    const now = new Date();
-    tx.update(partRef, {
-      quantity: part.data().quantity - 1,
-      untrackedQuantity: 0,
-      lastUsageId: 'replay-usage-forged',
-      updatedAt: now,
-    });
-    tx.update(ticketRef, {
-      partsCost: ticket.data().partsCost + totalCost,
-      lastPartsUsageId: 'replay-usage-forged',
-      updatedAt: now,
-    });
-    tx.set(usageRef, {
-      partId: 'replay-part', partName: 'SSD',
-      maintenanceId: 'replay-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 1, unitCost: 10, totalCost,
-      notes: '', usedAt: now, createdBy: 'manager-1',
-      allocationId: 'replay-usage-forged', allocationCount: 1,
-      legacyQuantity: 0, costAttributionComplete: true,
-    });
-    tx.set(allocationRef, {
-      usageId: 'replay-usage-forged', partId: 'replay-part',
-      officeId: 'office-a', maintenanceId: 'replay-ticket',
-      assetId: 'asset-1', quantity: 1, totalCost,
-      lines: [{
-        sourceType: 'lot', lotId: 'replay-lot', receiptId: 'replay-receipt',
-        supplier: 'Replay Supplier', quantity: 1, unitCost: 10, totalCost,
-      }],
-      createdAt: now, createdBy: 'manager-1',
-    });
+  await assertFails(setDoc(doc(manager, 'spare_part_allocations', 'forged-fifo'), {
+    usageId: 'forged-fifo', partId: 'fifo-server-part', officeId: 'office-a',
+    maintenanceId: 'fifo-server-ticket', assetId: 'asset-1',
+    quantity: 5, totalCost: 100, lines: [],
+    createdAt: new Date(), createdBy: 'manager-1',
   }));
-
-  // Reusing an old allocation to decrement its lot balance again is denied.
-  await assertFails(updateDoc(doc(manager, 'spare_part_lot_balances', 'replay-lot'), {
-    remainingQuantity: 5, updatedAt: new Date(),
-    lastAllocationId: 'replay-usage-1',
-  }));
-
-  // Replaying the old usage against stock, ticket cost and lot balance is also denied.
-  await assertFails(runTransaction(manager, async (tx) => {
-    const partRef = doc(manager, 'spare_parts', 'replay-part');
-    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
-    const balanceRef = doc(manager, 'spare_part_lot_balances', 'replay-lot');
-    const part = await tx.get(partRef);
-    const ticket = await tx.get(ticketRef);
-    const balance = await tx.get(balanceRef);
-    tx.update(partRef, {
-      quantity: part.data().quantity - 2,
-      untrackedQuantity: 0,
-      lastUsageId: 'replay-usage-1',
-      updatedAt: new Date(),
-    });
-    tx.update(ticketRef, {
-      partsCost: ticket.data().partsCost + 20,
-      lastPartsUsageId: 'replay-usage-1',
-      updatedAt: new Date(),
-    });
-    tx.update(balanceRef, {
-      remainingQuantity: balance.data().remainingQuantity - 2,
-      updatedAt: new Date(),
-      lastAllocationId: 'replay-usage-1',
-    });
-  }));
-
-  // A cost-only replay must not charge the same immutable usage twice.
-  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'replay-ticket'), {
-    partsCost: 50,
-    lastPartsUsageId: 'replay-usage-1',
-    updatedAt: new Date(),
+  await assertFails(setDoc(doc(manager, 'maintenance_parts', 'forged-fifo'), {
+    partId: 'fifo-server-part', partName: 'SSD',
+    maintenanceId: 'fifo-server-ticket', assetId: 'asset-1',
+    officeId: 'office-a', quantity: 5, unitCost: 20, totalCost: 100,
+    notes: '', usedAt: new Date(), createdBy: 'manager-1',
+    allocationId: 'forged-fifo', allocationCount: 1,
+    legacyQuantity: 0, costAttributionComplete: true,
   }));
 });
-
 test('an immutable receipt cannot be replayed to increase stock a second time', async () => {
   const manager = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
