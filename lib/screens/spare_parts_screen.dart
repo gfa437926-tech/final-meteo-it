@@ -75,6 +75,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
           ),
         ],
       ),
+      ),
     );
     if (saved == true) {
       try {
