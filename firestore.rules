@@ -406,7 +406,9 @@ service cloud.firestore {
       let allocation = getAfter(allocationPath).data;
       // A stock issue and its allocation are one-time events. Existing immutable
       // records must never authorize a second stock/cost mutation.
-      return !exists(usagePath) && !exists(allocationPath) &&
+      // maintenance_parts is evaluated by a create rule, and the
+      // allocation must be new so an old immutable event cannot be replayed.
+      return !exists(allocationPath) &&
         usage.allocationId == usageId &&
         usage.allocationCount is int &&
         usage.allocationCount >= 1 && usage.allocationCount <= 2 &&
@@ -587,9 +589,16 @@ service cloud.firestore {
       let usageId = request.resource.data.get('lastUsageId', null);
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
       let usage = getAfter(usagePath).data;
+      let ticketPath = /databases/$(database)/documents/maintenance_records/$(usage.maintenanceId);
+      let ticketAfter = getAfter(ticketPath).data;
       let oldUntracked = resource.data.get('untrackedQuantity', resource.data.quantity);
-      return usageId is string && existsAfter(usagePath) &&
+      // Full allocation validation runs once on the create-only usage record.
+      // This stock update only verifies the matching one-time event and deltas.
+      return usageId is string && !exists(usagePath) && existsAfter(usagePath) &&
         request.resource.data.officeId == resource.data.officeId &&
+        usage.quantity is int && usage.quantity > 0 &&
+        usage.legacyQuantity is int && usage.legacyQuantity >= 0 &&
+        usage.legacyQuantity <= usage.quantity &&
         request.resource.data.quantity == resource.data.quantity - usage.quantity &&
         request.resource.data.untrackedQuantity ==
           oldUntracked - usage.legacyQuantity &&
@@ -600,9 +609,8 @@ service cloud.firestore {
         usage.partId == partId &&
         usage.officeId == resource.data.officeId &&
         usage.allocationId == usageId &&
-        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.lastPartsUsageId == usageId &&
-        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.officeId == resource.data.officeId &&
-        validAllocationBatch(usageId, usage);
+        ticketAfter.lastPartsUsageId == usageId &&
+        ticketAfter.officeId == resource.data.officeId;
     }
 
     function validMaintenancePartsCostUpdate(recordId) {
@@ -793,18 +801,14 @@ service cloud.firestore {
       let allocationId = request.resource.data.get('lastAllocationId', null);
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(allocationId);
       let allocation = getAfter(allocationPath).data;
-      let partPath = /databases/$(database)/documents/spare_parts/$(resource.data.partId);
-      let ticketPath = /databases/$(database)/documents/maintenance_records/$(allocation.maintenanceId);
       let issuedQuantity = resource.data.remainingQuantity -
         request.resource.data.remainingQuantity;
+      // The allocation's create rule verifies its new usage event and links.
+      // Requiring a new allocation prevents replay of an older immutable event.
       return allocationId is string &&
         allocationId != resource.data.get('lastAllocationId', null) &&
         !exists(allocationPath) &&
         existsAfter(allocationPath) &&
-        existsAfter(partPath) && existsAfter(ticketPath) &&
-        getAfter(partPath).data.get('lastUsageId', null) == allocationId &&
-        getAfter(ticketPath).data.get('lastPartsUsageId', null) == allocationId &&
-        getAfter(ticketPath).data.officeId == resource.data.officeId &&
         request.resource.data.lotId == resource.data.lotId &&
         request.resource.data.partId == resource.data.partId &&
         request.resource.data.officeId == resource.data.officeId &&
