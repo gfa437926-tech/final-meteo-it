@@ -788,7 +788,9 @@ service cloud.firestore {
       let allocation = getAfter(allocationPath).data;
       let issuedQuantity = resource.data.remainingQuantity -
         request.resource.data.remainingQuantity;
-      return allocationId is string && existsAfter(allocationPath) &&
+      return allocationId is string &&
+        allocationId != resource.data.get('lastAllocationId', null) &&
+        existsAfter(allocationPath) &&
         request.resource.data.lotId == resource.data.lotId &&
         request.resource.data.partId == resource.data.partId &&
         request.resource.data.officeId == resource.data.officeId &&
