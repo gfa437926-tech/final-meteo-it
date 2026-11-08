@@ -135,4 +135,4 @@
 - تكشف الأرصدة السالبة أو غير المتطابقة والدفعات اليتيمة أو ذات المكتب المختلف.
 - تترك السجلات بلا `officeId` في حالة admin-only ولا تهيئها تلقائياً.
 - لا تدعم الكتابة مطلقاً، وترفض التشغيل ما لم يكن `FIRESTORE_EMULATOR_HOST` مضبوطاً.
-- تشغيلها محصور في Emulator: `cd functions && npm run plan:legacy-stock`. تقريرها للمراجعة فقط، ولا ينفذ backfill.
+- تشغيلها محصور في Emulator. من جذر المستودع شغّل `npx firebase-tools emulators:exec --only firestore --project demo-metra-it-assets "cd functions && npm run plan:legacy-stock"`. تقريرها للمراجعة فقط، ولا ينفذ backfill.
