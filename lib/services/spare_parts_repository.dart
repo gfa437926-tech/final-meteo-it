@@ -516,8 +516,8 @@ class SparePartsRepository {
         throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
       }
 
-      final totalCost = lines.fold<double>(0, (sum, line) =>
-          sum + ((line['totalCost'] as num?)?.toDouble() ?? 0));
+      final totalCost = lines.fold<double>(0, (runningTotal, line) =>
+          runningTotal + ((line['totalCost'] as num?)?.toDouble() ?? 0));
       final averageUnitCost = totalCost / quantity;
       final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
       if (!previousPartsCost.isFinite || previousPartsCost < 0) {
