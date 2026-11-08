@@ -1128,7 +1128,7 @@ test('spare part movement reads are office-scoped and usage events are immutable
 });
 
 
-test('FIFO allocations consume legacy stock first, then oldest supplier lots atomically', async () => {
+test('FIFO allocations consume legacy stock first and then the oldest supplier lot', async () => {
   const managerA = env.authenticatedContext('manager-1').firestore();
   const managerB = env.authenticatedContext('manager-b').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -1183,47 +1183,42 @@ test('FIFO allocations consume legacy stock first, then oldest supplier lots ato
     });
   });
 
+  // First issue: consume the untracked opening balance, then FIFO lot 1.
   await assertSucceeds(runTransaction(managerA, async (tx) => {
     const partRef = doc(managerA, 'spare_parts', 'fifo-part');
     const ticketRef = doc(managerA, 'maintenance_records', 'fifo-ticket');
-    const lot1Balance = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-1');
-    const lot2Balance = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2');
-    const usageRef = doc(managerA, 'maintenance_parts', 'fifo-usage');
-    const allocationRef = doc(managerA, 'spare_part_allocations', 'fifo-usage');
+    const lotBalanceRef = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-1');
+    const usageRef = doc(managerA, 'maintenance_parts', 'fifo-usage-1');
+    const allocationRef = doc(managerA, 'spare_part_allocations', 'fifo-usage-1');
     const part = await tx.get(partRef);
     const ticket = await tx.get(ticketRef);
-    const lot1 = await tx.get(lot1Balance);
-    const lot2 = await tx.get(lot2Balance);
+    const lotBalance = await tx.get(lotBalanceRef);
     assert.equal(part.data().quantity, 12);
     assert.equal(part.data().untrackedQuantity, 2);
-    assert.equal(lot1.data().remainingQuantity, 5);
-    assert.equal(lot2.data().remainingQuantity, 5);
+    assert.equal(lotBalance.data().remainingQuantity, 5);
     const now = new Date();
     tx.update(partRef, {
-      quantity: 4, untrackedQuantity: 0,
-      lastUsageId: 'fifo-usage', updatedAt: now,
+      quantity: 5, untrackedQuantity: 0,
+      lastUsageId: 'fifo-usage-1', updatedAt: now,
     });
     tx.update(ticketRef, {
-      partsCost: 70, lastPartsUsageId: 'fifo-usage', updatedAt: now,
+      partsCost: 50, lastPartsUsageId: 'fifo-usage-1', updatedAt: now,
     });
-    tx.update(lot1Balance, {
-      remainingQuantity: 0, updatedAt: now, lastAllocationId: 'fifo-usage',
-    });
-    tx.update(lot2Balance, {
-      remainingQuantity: 4, updatedAt: now, lastAllocationId: 'fifo-usage',
+    tx.update(lotBalanceRef, {
+      remainingQuantity: 0, updatedAt: now, lastAllocationId: 'fifo-usage-1',
     });
     tx.set(usageRef, {
       partId: 'fifo-part', partName: 'SSD',
       maintenanceId: 'fifo-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 8, unitCost: 8.75, totalCost: 70,
-      notes: 'FIFO issue', usedAt: now, createdBy: 'manager-1',
-      allocationId: 'fifo-usage', allocationCount: 3,
+      officeId: 'office-a', quantity: 7, unitCost: 50 / 7, totalCost: 50,
+      notes: 'Legacy + first FIFO lot', usedAt: now, createdBy: 'manager-1',
+      allocationId: 'fifo-usage-1', allocationCount: 2,
       legacyQuantity: 2, costAttributionComplete: false,
     });
     tx.set(allocationRef, {
-      usageId: 'fifo-usage', partId: 'fifo-part',
+      usageId: 'fifo-usage-1', partId: 'fifo-part',
       officeId: 'office-a', maintenanceId: 'fifo-ticket',
-      assetId: 'asset-1', quantity: 8, totalCost: 70,
+      assetId: 'asset-1', quantity: 7, totalCost: 50,
       lines: [
         {
           sourceType: 'legacy_untracked', lotId: null, receiptId: null,
@@ -1233,11 +1228,50 @@ test('FIFO allocations consume legacy stock first, then oldest supplier lots ato
           sourceType: 'lot', lotId: 'fifo-lot-1', receiptId: 'fifo-receipt-1',
           supplier: 'Supplier A', quantity: 5, unitCost: 10, totalCost: 50,
         },
-        {
-          sourceType: 'lot', lotId: 'fifo-lot-2', receiptId: 'fifo-receipt-2',
-          supplier: 'Supplier B', quantity: 1, unitCost: 20, totalCost: 20,
-        },
       ],
+      createdAt: now, createdBy: 'manager-1',
+    });
+  }));
+
+  // Second issue: FIFO proceeds to lot 2 only after lot 1 is exhausted.
+  await assertSucceeds(runTransaction(managerA, async (tx) => {
+    const partRef = doc(managerA, 'spare_parts', 'fifo-part');
+    const ticketRef = doc(managerA, 'maintenance_records', 'fifo-ticket');
+    const lotBalanceRef = doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2');
+    const usageRef = doc(managerA, 'maintenance_parts', 'fifo-usage-2');
+    const allocationRef = doc(managerA, 'spare_part_allocations', 'fifo-usage-2');
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    const lotBalance = await tx.get(lotBalanceRef);
+    assert.equal(part.data().quantity, 5);
+    assert.equal(lotBalance.data().remainingQuantity, 5);
+    const now = new Date();
+    tx.update(partRef, {
+      quantity: 4, untrackedQuantity: 0,
+      lastUsageId: 'fifo-usage-2', updatedAt: now,
+    });
+    tx.update(ticketRef, {
+      partsCost: 70, lastPartsUsageId: 'fifo-usage-2', updatedAt: now,
+    });
+    tx.update(lotBalanceRef, {
+      remainingQuantity: 4, updatedAt: now, lastAllocationId: 'fifo-usage-2',
+    });
+    tx.set(usageRef, {
+      partId: 'fifo-part', partName: 'SSD',
+      maintenanceId: 'fifo-ticket', assetId: 'asset-1',
+      officeId: 'office-a', quantity: 1, unitCost: 20, totalCost: 20,
+      notes: 'Second FIFO lot', usedAt: now, createdBy: 'manager-1',
+      allocationId: 'fifo-usage-2', allocationCount: 1,
+      legacyQuantity: 0, costAttributionComplete: true,
+    });
+    tx.set(allocationRef, {
+      usageId: 'fifo-usage-2', partId: 'fifo-part',
+      officeId: 'office-a', maintenanceId: 'fifo-ticket',
+      assetId: 'asset-1', quantity: 1, totalCost: 20,
+      lines: [{
+        sourceType: 'lot', lotId: 'fifo-lot-2', receiptId: 'fifo-receipt-2',
+        supplier: 'Supplier B', quantity: 1, unitCost: 20, totalCost: 20,
+      }],
       createdAt: now, createdBy: 'manager-1',
     });
   }));
@@ -1246,23 +1280,24 @@ test('FIFO allocations consume legacy stock first, then oldest supplier lots ato
   const ticketAfter = await getDoc(doc(managerA, 'maintenance_records', 'fifo-ticket'));
   const lot1After = await getDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-1'));
   const lot2After = await getDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2'));
-  const allocationAfter = await getDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage'));
+  const firstAllocation = await getDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1'));
+  const secondAllocation = await getDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-2'));
   assert.equal(partAfter.data().quantity, 4);
   assert.equal(partAfter.data().untrackedQuantity, 0);
   assert.equal(ticketAfter.data().partsCost, 70);
   assert.equal(lot1After.data().remainingQuantity, 0);
   assert.equal(lot2After.data().remainingQuantity, 4);
-  assert.equal(allocationAfter.data().lines[0].supplier, null);
-  assert.equal(allocationAfter.data().lines[1].supplier, 'Supplier A');
-  assert.equal(allocationAfter.data().lines[2].supplier, 'Supplier B');
+  assert.equal(firstAllocation.data().lines[0].supplier, null);
+  assert.equal(firstAllocation.data().lines[1].supplier, 'Supplier A');
+  assert.equal(secondAllocation.data().lines[0].supplier, 'Supplier B');
 
-  await assertFails(updateDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage'), {
+  await assertFails(updateDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1'), {
     totalCost: 700,
   }));
-  await assertFails(deleteDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage')));
+  await assertFails(deleteDoc(doc(managerA, 'spare_part_allocations', 'fifo-usage-1')));
   await assertFails(updateDoc(doc(managerA, 'spare_part_lot_balances', 'fifo-lot-2'), {
     remainingQuantity: 99,
   }));
-  await assertFails(getDoc(doc(managerB, 'spare_part_allocations', 'fifo-usage')));
+  await assertFails(getDoc(doc(managerB, 'spare_part_allocations', 'fifo-usage-1')));
   await assertFails(getDoc(doc(managerB, 'spare_part_lots', 'fifo-lot-1')));
 });
