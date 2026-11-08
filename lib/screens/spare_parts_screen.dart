@@ -332,7 +332,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       if (rawLines is! List) continue;
       for (final rawLine in rawLines) {
         if (rawLine is! Map || rawLine['sourceType'] != 'lot' ||
-            rawLine['supplier'] != selectedSupplier) continue;
+            rawLine['supplier'] != selectedSupplier) {
+          continue;
+        }
         result.add({
           ...event,
           'quantity': (rawLine['quantity'] as num?)?.toInt() ?? 0,
