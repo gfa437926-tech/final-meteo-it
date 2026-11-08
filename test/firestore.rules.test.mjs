@@ -692,3 +692,20 @@ test('maintenance and purchases are isolated by linked asset office', async () =
   await assertSucceeds(getDoc(doc(admin, 'purchase_records', 'purchase-b')));
 });
 
+
+
+test('purchase records are immutable after creation', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'purchase_records', 'immutable-purchase'), {
+      assetId: 'asset-1', officeId: 'office-a', supplier: 'Original Supplier',
+      purchaseDate: new Date(), totalCost: 125,
+    });
+  });
+
+  await assertFails(updateDoc(doc(manager, 'purchase_records', 'immutable-purchase'), {
+    supplier: 'Tampered Supplier',
+    totalCost: 1,
+  }));
+  await assertFails(deleteDoc(doc(manager, 'purchase_records', 'immutable-purchase')));
+});
