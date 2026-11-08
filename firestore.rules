@@ -355,10 +355,83 @@ service cloud.firestore {
         hasOfficeAccess(usage.officeId);
     }
 
+    function validSparePartRestock(partId) {
+      let restockId = request.resource.data.get('lastRestockId', null);
+      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(restockId);
+      let receipt = getAfter(receiptPath).data;
+      let oldQuantity = resource.data.quantity;
+      let receivedQuantity = receipt.quantity;
+      let newQuantity = oldQuantity + receivedQuantity;
+      let expectedAverageCost =
+        ((oldQuantity * resource.data.unitCost) + receipt.totalCost) / newQuantity;
+      return restockId is string && existsAfter(receiptPath) &&
+        request.resource.data.officeId == resource.data.officeId &&
+        receipt.partId == partId &&
+        receipt.officeId == resource.data.officeId &&
+        receipt.createdBy == request.auth.uid &&
+        receipt.quantityBefore == oldQuantity &&
+        receipt.quantityAfter == request.resource.data.quantity &&
+        receivedQuantity is int && receivedQuantity > 0 &&
+        request.resource.data.quantity == newQuantity &&
+        receipt.unitCost is number && receipt.unitCost >= 0 &&
+        receipt.totalCost == receivedQuantity * receipt.unitCost &&
+        request.resource.data.unitCost == expectedAverageCost &&
+        request.resource.data.supplier == receipt.supplier &&
+        request.resource.data.lastRestockId == restockId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['quantity', 'unitCost', 'supplier', 'lastRestockId', 'updatedAt']) &&
+        request.resource.data.updatedAt is timestamp &&
+        receipt.receivedAt is timestamp &&
+        receipt.createdAt is timestamp &&
+        receipt.supplier is string && receipt.supplier.size() > 0 &&
+        receipt.notes is string &&
+        receipt.keys().hasOnly([
+          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
+          'createdAt', 'createdBy'
+        ]) &&
+        receipt.keys().hasAll([
+          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
+          'createdAt', 'createdBy'
+        ]) &&
+        hasOfficeAccess(resource.data.officeId);
+    }
+
+    function validSparePartReceiptCreate(receiptId, data) {
+      let partPath = /databases/$(database)/documents/spare_parts/$(data.partId);
+      return isActiveUser() && data.keys().hasOnly([
+          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
+          'createdAt', 'createdBy'
+        ]) &&
+        data.keys().hasAll([
+          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
+          'createdAt', 'createdBy'
+        ]) &&
+        data.partId is string && data.officeId is string &&
+        data.quantity is int && data.quantity > 0 &&
+        data.quantityBefore is int && data.quantityBefore >= 0 &&
+        data.quantityAfter is int &&
+        data.quantityAfter == data.quantityBefore + data.quantity &&
+        data.unitCost is number && data.unitCost >= 0 &&
+        data.totalCost is number && data.totalCost == data.quantity * data.unitCost &&
+        data.supplier is string && data.supplier.size() > 0 &&
+        data.notes is string &&
+        data.receivedAt is timestamp && data.createdAt is timestamp &&
+        data.createdBy == request.auth.uid &&
+        hasOfficeAccess(data.officeId) &&
+        existsAfter(partPath) &&
+        getAfter(partPath).data.officeId == data.officeId &&
+        getAfter(partPath).data.quantity == data.quantityAfter &&
+        getAfter(partPath).data.lastRestockId == receiptId;
+    }
+
     function validSparePart(data, officeId) {
       return data.keys().hasOnly([
           'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
-          'unitCost', 'supplier', 'createdAt', 'updatedAt'
+          'unitCost', 'supplier', 'createdAt', 'updatedAt', 'lastRestockId'
         ]) &&
         data.keys().hasAll([
           'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
@@ -521,11 +594,16 @@ service cloud.firestore {
       allow read: if canReadAsset(resource.data);
       allow create: if canWriteAsset(request.resource.data) &&
         validSparePart(request.resource.data, request.resource.data.officeId);
-      // Stock can only decrease as part of a linked, atomic maintenance usage.
-      // Restocking or correcting stock requires a separately reviewed flow.
+      // Stock changes only through a validated atomic usage or receipt.
       allow update: if canWriteAsset(resource.data) &&
-        validSparePartConsumption(partId);
+        (validSparePartConsumption(partId) || validSparePartRestock(partId));
       allow delete: if false;
+    }
+
+    match /spare_part_receipts/{receiptId} {
+      allow read: if canReadAsset(resource.data);
+      allow create: if validSparePartReceiptCreate(receiptId, request.resource.data);
+      allow update, delete: if false;
     }
 
     // Only non-sensitive shared lookup catalogues remain on the generic
