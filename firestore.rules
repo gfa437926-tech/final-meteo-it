@@ -450,7 +450,6 @@ service cloud.firestore {
     function validSparePartConsumption(partId) {
       let usageId = request.resource.data.get('lastUsageId', null);
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
-      let ticketPath = /databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId);
       return usageId is string && existsAfter(usagePath) &&
         request.resource.data.officeId == resource.data.officeId &&
         request.resource.data.quantity == resource.data.quantity - getAfter(usagePath).data.quantity &&
@@ -460,8 +459,8 @@ service cloud.firestore {
         request.resource.data.updatedAt is timestamp &&
         getAfter(usagePath).data.partId == partId &&
         getAfter(usagePath).data.officeId == resource.data.officeId &&
-        getAfter(ticketPath).data.lastPartsUsageId == usageId &&
-        getAfter(ticketPath).data.officeId == resource.data.officeId;
+        getAfter(/databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId)).data.lastPartsUsageId == usageId &&
+        getAfter(/databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId)).data.officeId == resource.data.officeId;
     }
 
     function validMaintenancePartsCostUpdate(recordId) {
