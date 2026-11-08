@@ -71,7 +71,7 @@ Movement records are visible only to the global administrator or managers assign
 
 ## maintenance_parts/{usageId}
 
-Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `officeId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`, `createdBy`. The office must match the part, maintenance ticket, and linked asset; `createdBy` is the authenticated Firebase UID. The event is immutable.
+Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `officeId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`, `createdBy`, `allocationId`, `allocationCount`, `legacyQuantity`, `costAttributionComplete`. The office must match the part, maintenance ticket, and linked asset; `createdBy` is the authenticated Firebase UID. The event is immutable.
 
 
 ## asset_documents
@@ -102,7 +102,7 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 
 ## spare_part_receipts
 
-سجل توريد غير قابل للتعديل أو الحذف: `partId, officeId, quantity, quantityBefore, quantityAfter, unitCost, totalCost, supplier, notes, receivedAt, createdAt, createdBy`. يُنشأ فقط ضمن معاملة واحدة تحدث سجل `spare_parts` المرتبط. `createdBy` هو UID للمستخدم المصادق عليه، و`officeId` يطابق مكتب القطعة. تُحفظ تكلفة شراء الدفعة في الإيصال، ويُحدّث `spare_parts.unitCost` بسعر شراء آخر دفعة. لا يسمح بزيادة الكمية أو تعديل المورد/متوسط التكلفة دون إيصال صحيح.
+سجل توريد غير قابل للتعديل أو الحذف: `partId, officeId, lotId, quantity, quantityBefore, quantityAfter, unitCost, totalCost, supplier, notes, receivedAt, createdAt, createdBy`. يُنشأ فقط ضمن معاملة واحدة تحدث سجل `spare_parts` المرتبط. `createdBy` هو UID للمستخدم المصادق عليه، و`officeId` يطابق مكتب القطعة. تُحفظ تكلفة شراء الدفعة في الإيصال، ويُحدّث `spare_parts.unitCost` بسعر شراء آخر دفعة. لا يسمح بزيادة الكمية أو تعديل المورد/متوسط التكلفة دون إيصال صحيح.
 
 
 ## سجل حركة مخزون قطع الغيار والتقارير
@@ -118,7 +118,7 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 
 - شاشة التقرير تقبل فترة زمنية وتجمع إيصالات `spare_part_receipts` حسب `receivedAt` وسجلات `maintenance_parts` حسب `usedAt`.
 - المقارنة حسب المكتب تعرض كميات الوارد وتكلفته مقابل كميات الصرف وقيمته لكل مكتب ضمن الفترة. يمكن تضييق التقرير إلى مكتب واحد.
-- تحليل الموردين يقتصر على الوارد، لأن إيصال التوريد وحده يحمل المورد. حركات الصرف لا تُنسب إلى مورد محدد في غياب تتبع الدفعات/التشغيلات، ويظهر ذلك للمستخدم صراحة.
+- يعتمد تحليل الموردين في الوارد على إيصالات التوريد، وفي الصرف على خطوط FIFO المرتبطة بالدفعات الفعلية. تبقى الحركات التاريخية والكمية غير المنسوبة بلا مورد؛ ولا يُستنتج المورد من آخر توريد.
 - فلتر المورد يقيّد مؤشرات الوارد وتفصيل المورد، ولا يخفي الصرف المقابل؛ وبذلك تبقى مقارنة الوارد بالمنصرف في المكتب والفترة واضحة.
 - لا تُكتب أي بيانات أثناء إنشاء التقرير. جميع الأرقام مشتقة من السجلات الأصلية append-only.
 
