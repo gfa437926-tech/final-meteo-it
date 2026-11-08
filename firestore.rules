@@ -536,6 +536,7 @@ service cloud.firestore {
         data.receivedAt is timestamp && data.createdAt is timestamp &&
         data.createdBy == request.auth.uid &&
         hasOfficeAccess(data.officeId) &&
+        !exists(lotPath) && !exists(balancePath) &&
         existsAfter(partPath) && existsAfter(lotPath) && existsAfter(balancePath) &&
         partAfter.officeId == data.officeId &&
         partAfter.quantity == data.quantityAfter &&
@@ -743,7 +744,8 @@ service cloud.firestore {
         data.receivedAt is timestamp && data.createdAt is timestamp &&
         data.createdBy == request.auth.uid &&
         hasOfficeAccess(data.officeId) &&
-        existsAfter(receiptPath) && existsAfter(partPath) &&
+        !exists(receiptPath) && existsAfter(receiptPath) &&
+        existsAfter(partPath) &&
         getAfter(receiptPath).data.lotId == lotId &&
         getAfter(receiptPath).data.partId == data.partId &&
         getAfter(receiptPath).data.officeId == data.officeId &&
@@ -764,6 +766,7 @@ service cloud.firestore {
         data.remainingQuantity is int && data.remainingQuantity > 0 &&
         data.createdAt is timestamp && data.updatedAt is timestamp &&
         data.lastAllocationId == null &&
+        !exists(lotPath) &&
         existsAfter(lotPath) &&
         getAfter(lotPath).data.partId == data.partId &&
         getAfter(lotPath).data.officeId == data.officeId &&
