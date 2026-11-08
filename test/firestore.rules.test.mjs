@@ -694,6 +694,38 @@ test('maintenance and purchases are isolated by linked asset office', async () =
 
 
 
+test('asset document purchase links must match the same asset and office', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'purchase_records', 'purchase-link-a'), {
+      assetId: 'asset-1', officeId: 'office-a', supplier: 'Supplier A',
+      purchaseDate: new Date(), totalCost: 50,
+    });
+    await setDoc(doc(db, 'purchase_records', 'purchase-link-b'), {
+      assetId: 'asset-b', officeId: 'office-b', supplier: 'Supplier B',
+      purchaseDate: new Date(), totalCost: 75,
+    });
+  });
+
+  const base = {
+    assetId: 'asset-1', officeId: 'office-a',
+    fileName: 'invoice.pdf', storagePath: 'asset_documents/asset-1/invoice.pdf',
+    purchaseRecordId: 'purchase-link-a',
+  };
+  await assertSucceeds(setDoc(doc(manager, 'asset_documents', 'valid-purchase-link'), base));
+  await assertFails(setDoc(doc(manager, 'asset_documents', 'wrong-purchase-office'), {
+    ...base, purchaseRecordId: 'purchase-link-b',
+  }));
+  await assertFails(setDoc(doc(manager, 'asset_documents', 'wrong-purchase-asset'), {
+    ...base, assetId: 'asset-b', officeId: 'office-b',
+    storagePath: 'asset_documents/asset-b/wrong.pdf',
+  }));
+  await assertFails(setDoc(doc(manager, 'asset_documents', 'missing-purchase'), {
+    ...base, purchaseRecordId: 'does-not-exist',
+  }));
+});
+
 test('purchase records are immutable after creation', async () => {
   const manager = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
