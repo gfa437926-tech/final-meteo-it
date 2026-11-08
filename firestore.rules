@@ -390,55 +390,26 @@ service cloud.firestore {
         getAfter(balancePath).data.updatedAt is timestamp;
     }
     function validAllocationLines(lines, usageId, usage) {
-      return lines is list && lines.size() >= 1 && lines.size() <= 2 &&
+      return lines is list && usage.allocationCount is int &&
+        usage.allocationCount >= 1 && usage.allocationCount <= 2 &&
+        lines.size() == usage.allocationCount &&
         allocationLineQuantity(lines, 0) +
           allocationLineQuantity(lines, 1) == usage.quantity &&
         allocationLineCost(lines, 0) +
           allocationLineCost(lines, 1) == usage.totalCost &&
         allocationLineLegacyQuantity(lines, 0) +
           allocationLineLegacyQuantity(lines, 1) == usage.legacyQuantity &&
+        usage.legacyQuantity is int && usage.legacyQuantity >= 0 &&
+        usage.legacyQuantity <= usage.quantity &&
+        usage.costAttributionComplete == (usage.legacyQuantity == 0) &&
         validAllocationLine(lines, 0, usageId, usage) &&
         validAllocationLine(lines, 1, usageId, usage);
-    }
-    function validAllocationBatch(usageId, usage) {
-      let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
-      let allocation = getAfter(allocationPath).data;
-      // A stock issue and its allocation are one-time events. Existing immutable
-      // records must never authorize a second stock/cost mutation.
-      // maintenance_parts is evaluated by a create rule, and the
-      // allocation must be new so an old immutable event cannot be replayed.
-      return !exists(allocationPath) &&
-        usage.allocationId == usageId &&
-        usage.allocationCount is int &&
-        usage.allocationCount >= 1 && usage.allocationCount <= 2 &&
-        usage.legacyQuantity is int &&
-        usage.legacyQuantity >= 0 && usage.legacyQuantity <= usage.quantity &&
-        usage.costAttributionComplete == (usage.legacyQuantity == 0) &&
-        existsAfter(allocationPath) &&
-        allocation.keys().hasOnly([
-          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
-          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
-        ]) &&
-        allocation.keys().hasAll([
-          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
-          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
-        ]) &&
-        allocation.usageId == usageId &&
-        allocation.partId == usage.partId &&
-        allocation.officeId == usage.officeId &&
-        allocation.maintenanceId == usage.maintenanceId &&
-        allocation.assetId == usage.assetId &&
-        allocation.quantity == usage.quantity &&
-        allocation.totalCost == usage.totalCost &&
-        allocation.lines.size() == usage.allocationCount &&
-        allocation.createdBy == request.auth.uid &&
-        allocation.createdAt is timestamp &&
-        validAllocationLines(allocation.lines, usageId, usage);
     }
     function validPartsUsageLink(usageId, usage) {
       let partPath = /databases/$(database)/documents/spare_parts/$(usage.partId);
       let ticketPath = /databases/$(database)/documents/maintenance_records/$(usage.maintenanceId);
       let assetPath = /databases/$(database)/documents/assets/$(usage.assetId);
+      let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
       return usageId is string && usageId.size() > 0 &&
         usage.partId is string && usage.partName is string &&
         usage.maintenanceId is string && usage.assetId is string &&
@@ -459,9 +430,9 @@ service cloud.firestore {
         getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
         getAfter(ticketPath).data.assetId == usage.assetId &&
         getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
-        hasOfficeAccess(usage.officeId) &&
-        // Validate the immutable FIFO allocation exactly once on usage creation.
-        validAllocationBatch(usageId, usage);
+        usage.allocationId == usageId &&
+        !exists(allocationPath) && existsAfter(allocationPath) &&
+        hasOfficeAccess(usage.officeId);
     }
 
     function validSparePartRestock(partId) {
@@ -829,6 +800,7 @@ service cloud.firestore {
     }
     function validSparePartAllocationCreate(allocationId, data) {
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(allocationId);
+      let usage = getAfter(usagePath).data;
       return isActiveUser() && data.keys().hasOnly([
           'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
           'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
@@ -838,16 +810,18 @@ service cloud.firestore {
           'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
         ]) &&
         data.usageId == allocationId &&
-        existsAfter(usagePath) &&
-        getAfter(usagePath).data.allocationId == allocationId &&
-        getAfter(usagePath).data.partId == data.partId &&
-        getAfter(usagePath).data.officeId == data.officeId &&
-        getAfter(usagePath).data.maintenanceId == data.maintenanceId &&
-        getAfter(usagePath).data.assetId == data.assetId &&
-        getAfter(usagePath).data.quantity == data.quantity &&
-        getAfter(usagePath).data.totalCost == data.totalCost &&
-        getAfter(usagePath).data.createdBy == data.createdBy &&
-        data.createdBy == request.auth.uid;
+        !exists(usagePath) && existsAfter(usagePath) &&
+        usage.allocationId == allocationId &&
+        data.partId == usage.partId &&
+        data.officeId == usage.officeId &&
+        data.maintenanceId == usage.maintenanceId &&
+        data.assetId == usage.assetId &&
+        data.quantity == usage.quantity &&
+        data.totalCost == usage.totalCost &&
+        data.createdBy == usage.createdBy &&
+        data.createdBy == request.auth.uid &&
+        data.createdAt is timestamp &&
+        validAllocationLines(data.lines, allocationId, usage);
     }
 
     match /spare_parts/{partId} {
