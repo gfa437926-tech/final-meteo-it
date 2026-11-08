@@ -342,6 +342,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
           'unitCost': (rawLine['unitCost'] as num?)?.toDouble() ?? 0,
           'totalCost': (rawLine['totalCost'] as num?)?.toDouble() ?? 0,
           'supplier': rawLine['supplier'],
+          'costAttributionComplete': true,
           'allocationLine': true,
         });
       }
@@ -372,8 +373,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       TextCellValue('القطعة'),
       TextCellValue('معرّف القطعة'),
       TextCellValue('الكمية'),
-      TextCellValue('تكلفة الوحدة'),
-      TextCellValue('إجمالي التكلفة'),
+      TextCellValue('تكلفة الوحدة الموثقة'),
+      TextCellValue('إجمالي التكلفة الموثقة'),
       TextCellValue('المورد'),
       TextCellValue('طلب الصيانة'),
       TextCellValue('المنفذ'),
@@ -390,7 +391,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         TextCellValue(event['partName']?.toString() ?? ''),
         TextCellValue(event['partId']?.toString() ?? ''),
         IntCellValue((event['quantity'] as num?)?.toInt() ?? 0),
-        DoubleCellValue((event['unitCost'] as num?)?.toDouble() ?? 0),
+        event['isIncoming'] == true || event['costAttributionComplete'] == true
+            ? DoubleCellValue((event['unitCost'] as num?)?.toDouble() ?? 0)
+            : TextCellValue('تكلفة الوحدة غير منسوبة'),
         DoubleCellValue((event['totalCost'] as num?)?.toDouble() ?? 0),
         TextCellValue(event['supplier']?.toString() ?? ''),
         TextCellValue(event['maintenanceId']?.toString() ?? ''),
@@ -600,7 +603,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         _historyMetric('الكمية المستلمة', quantityOf(incoming).toString()),
                         _historyMetric('تكلفة التوريد', costOf(incoming).toStringAsFixed(2)),
                         _historyMetric('الكمية المصروفة', quantityOf(outgoing).toString()),
-                        _historyMetric('قيمة الصرف', costOf(outgoing).toStringAsFixed(2)),
+                        _historyMetric('قيمة الصرف الموثقة', costOf(outgoing).toStringAsFixed(2)),
                         _historyMetric('صرف غير مكتمل النسبة', filteredEvents.where((e) =>
                           e['isIncoming'] == false && e['costAttributionComplete'] != true).length.toString()),
                       ]),
@@ -622,7 +625,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             child: ListTile(
                               title: Text(officeNames[id] ?? id),
                               subtitle: Text('وارد: ${quantityOf(receivedRows)} • تكلفة: ${costOf(receivedRows).toStringAsFixed(2)}\n'
-                                  'منصرف: ${quantityOf(issuedRows)} • قيمة: ${costOf(issuedRows).toStringAsFixed(2)}'),
+                                  'منصرف: ${quantityOf(issuedRows)} • قيمة موثقة: ${costOf(issuedRows).toStringAsFixed(2)}'),
                             ),
                           );
                         }),
@@ -850,7 +853,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                     _historyMetric('إجمالي المنصرف', consumed.toString()),
                     _historyMetric('الرصيد الحالي', closing.toString()),
                     _historyMetric('تكلفة التوريد', receivedCost.toStringAsFixed(2)),
-                    _historyMetric('قيمة الصرف', issuedCost.toStringAsFixed(2)),
+                    _historyMetric('قيمة الصرف الموثقة', issuedCost.toStringAsFixed(2)),
                   ]),
                   const SizedBox(height: 12),
                   Text('الموردون: ${suppliers.isEmpty ? '—' : suppliers.join('، ')}'),
