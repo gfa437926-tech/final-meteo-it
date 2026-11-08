@@ -67,6 +67,83 @@ class SparePartsRepository {
         return _tickets.where('officeId', whereIn: officeIds).snapshots();
       });
 
+
+  /// Loads an office-authorized, read-only report assembled from immutable
+  /// receipt and issue events. Supplier attribution applies to receipts only:
+  /// issue events do not retain lot-level supplier provenance.
+  Future<List<Map<String, dynamic>>> loadMovementReport({
+    required DateTime start,
+    required DateTime endExclusive,
+    String? officeId,
+  }) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
+    final profile = await db.collection('users').doc(uid).get();
+    final user = profile.data() ?? const <String, dynamic>{};
+    if (user['isActive'] != true) throw StateError('الحساب غير نشط');
+
+    List<String>? allowedOffices;
+    if (user['role'] != 'admin') {
+      final raw = user['officeIds'];
+      final assigned = raw is List
+          ? raw.whereType<String>().toSet().toList()
+          : <String>[];
+      if (user['role'] != 'it_manager' || assigned.isEmpty) {
+        throw StateError('لا توجد مكاتب مخولة للتقرير');
+      }
+      final active = await db.collection('offices')
+          .where(FieldPath.documentId, whereIn: assigned)
+          .where('isActive', isEqualTo: true).get();
+      allowedOffices = active.docs.map((doc) => doc.id).toList();
+    }
+
+    if (officeId != null && officeId.isNotEmpty &&
+        allowedOffices != null && !allowedOffices.contains(officeId)) {
+      throw StateError('لا تملك صلاحية الاطلاع على هذا المكتب');
+    }
+
+    Query<Map<String, dynamic>> receiptsQuery =
+        db.collection('spare_part_receipts');
+    Query<Map<String, dynamic>> issuesQuery =
+        db.collection('maintenance_parts');
+    if (officeId != null && officeId.isNotEmpty) {
+      receiptsQuery = receiptsQuery.where('officeId', isEqualTo: officeId);
+      issuesQuery = issuesQuery.where('officeId', isEqualTo: officeId);
+    } else if (allowedOffices != null) {
+      if (allowedOffices.isEmpty) return <Map<String, dynamic>>[];
+      receiptsQuery = receiptsQuery.where('officeId', whereIn: allowedOffices);
+      issuesQuery = issuesQuery.where('officeId', whereIn: allowedOffices);
+    }
+
+    final snapshots = await Future.wait([receiptsQuery.get(), issuesQuery.get()]);
+    final events = <Map<String, dynamic>>[];
+    void appendEvents(QuerySnapshot<Map<String, dynamic>> snapshot,
+        String kind, String dateField, bool incoming) {
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final rawDate = data[dateField];
+        final eventDate = rawDate is Timestamp ? rawDate.toDate() :
+            rawDate is DateTime ? rawDate : null;
+        if (eventDate == null || eventDate.isBefore(start) ||
+            !eventDate.isBefore(endExclusive)) continue;
+        events.add({
+          ...data,
+          'eventId': doc.id,
+          'kind': kind,
+          'eventAt': eventDate,
+          'quantity': (data['quantity'] as num?)?.toInt() ?? 0,
+          'totalCost': (data['totalCost'] as num?)?.toDouble() ?? 0,
+          'isIncoming': incoming,
+        });
+      }
+    }
+    appendEvents(snapshots[0], 'توريد', 'receivedAt', true);
+    appendEvents(snapshots[1], 'صرف', 'usedAt', false);
+    events.sort((a, b) =>
+        (b['eventAt'] as DateTime).compareTo(a['eventAt'] as DateTime));
+    return events;
+  }
+
   Future<void> _assertOfficeAssignment(String officeId) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
