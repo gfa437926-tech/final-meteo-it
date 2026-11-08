@@ -124,8 +124,11 @@ export async function consumeSparePartCore({ db, uid, data, FieldValue }) {
     for (const lotDocument of lotsSnapshot.docs) {
       if (remainingToAllocate === 0) break;
       const lot = lotDocument.data();
+      if (!isNonEmptyString(lot.receiptId)) {
+        fail('failed-precondition', 'دفعة التوريد لا ترتبط بإيصال صالح');
+      }
       const balanceRef = db.collection('spare_part_lot_balances').doc(lotDocument.id);
-      const receiptRef = db.collection('spare_part_receipts').doc(lot.receiptId ?? '');
+      const receiptRef = db.collection('spare_part_receipts').doc(lot.receiptId);
       const [balanceSnapshot, receiptSnapshot] = await Promise.all([
         transaction.get(balanceRef),
         transaction.get(receiptRef),
