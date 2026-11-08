@@ -1,15 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class SparePartsRepository {
   SparePartsRepository({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
+    FirebaseFunctions? functions,
   })  : db = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+        _auth = auth ?? FirebaseAuth.instance,
+        _functions = functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   final FirebaseFirestore db;
   final FirebaseAuth _auth;
+  final FirebaseFunctions _functions;
 
   CollectionReference<Map<String, dynamic>> get parts =>
       db.collection('spare_parts');
@@ -370,239 +374,30 @@ class SparePartsRepository {
     });
   }
 
+  /// Stock consumption is performed by a trusted callable transaction.
+  /// The client never chooses a lot or writes stock/allocation records directly.
   Future<void> consume({
     required String partId,
     required String maintenanceId,
     required int quantity,
     required String notes,
   }) async {
-    if (quantity <= 0) throw ArgumentError('الكمية يجب أن تكون أكبر من صفر');
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
-    final partRef = parts.doc(partId);
-    final ticketRef = _tickets.doc(maintenanceId);
-    final usageRef = db.collection('maintenance_parts').doc();
-    final allocationRef = db.collection('spare_part_allocations').doc(usageRef.id);
-    final assetCollection = db.collection('assets');
-
-    // Read the immutable lot catalogue before opening the transaction. The
-    // part's lastRestockId is rechecked transactionally to detect a concurrent
-    // receipt that would otherwise be absent from this FIFO candidate list.
-    final initialPartSnapshot = await partRef.get();
-    if (!initialPartSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
-    final initialPart = initialPartSnapshot.data()!;
-    final officeId = initialPart['officeId'] as String? ?? '';
-    if (officeId.isEmpty) throw StateError('قطعة الغيار لا ترتبط بمكتب صالح');
-    final initialLastRestockId = initialPart['lastRestockId'];
-    final lotQuery = db.collection('spare_part_lots')
-        .where('officeId', isEqualTo: officeId)
-        .where('partId', isEqualTo: partId)
-        .orderBy('receivedAt')
-        .orderBy('createdAt')
-        .limit(500);
-    final lotDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    DocumentSnapshot<Map<String, dynamic>>? lotCursor;
-    while (true) {
-      final pageQuery = lotCursor == null
-          ? lotQuery
-          : lotQuery.startAfterDocument(lotCursor);
-      final page = await pageQuery.get();
-      lotDocs.addAll(page.docs);
-      if (page.docs.length < 500) break;
-      lotCursor = page.docs.last;
+    if (quantity <= 0) {
+      throw ArgumentError('الكمية يجب أن تكون أكبر من صفر');
     }
-
-    await db.runTransaction((transaction) async {
-      final partSnapshot = await transaction.get(partRef);
-      final ticketSnapshot = await transaction.get(ticketRef);
-      if (!partSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
-      if (!ticketSnapshot.exists) throw StateError('طلب الصيانة غير موجود');
-
-      final part = partSnapshot.data()!;
-      final ticket = ticketSnapshot.data()!;
-      if (part['lastRestockId'] != initialLastRestockId) {
-        throw StateError('تغيرت دفعات التوريد أثناء تجهيز الصرف؛ أعد المحاولة');
-      }
-      final status = ticket['status'] as String? ?? '';
-      if (status != 'open' && status != 'inProgress') {
-        throw StateError('لا يمكن صرف قطع غيار لطلب صيانة مغلق');
-      }
-
-      final assetId = ticket['assetId'] as String? ?? '';
-      final ticketOfficeId = ticket['officeId'] as String? ?? '';
-      if (assetId.isEmpty || ticketOfficeId.isEmpty) {
-        throw StateError('طلب الصيانة غير مرتبط بأصل ومكتب صالحين');
-      }
-      final assetRef = assetCollection.doc(assetId);
-      final officeRef = db.collection('offices').doc(ticketOfficeId);
-      final assetSnapshot = await transaction.get(assetRef);
-      final officeSnapshot = await transaction.get(officeRef);
-      if (!assetSnapshot.exists || !officeSnapshot.exists ||
-          officeSnapshot.data()?['isActive'] != true) {
-        throw StateError('الأصل أو المكتب غير موجود أو غير نشط');
-      }
-      if (assetSnapshot.data()?['officeId'] != ticketOfficeId ||
-          part['officeId'] != ticketOfficeId) {
-        throw StateError('يجب أن تتطابق مكاتب القطعة وطلب الصيانة والأصل');
-      }
-      if (assetSnapshot.data()?['status'] != 'maintenance') {
-        throw StateError('الأصل المرتبط ليس في حالة صيانة');
-      }
-
-      final available = part['quantity'] is int
-          ? part['quantity'] as int
-          : -1;
-      if (available < quantity) throw StateError('الكمية المتاحة غير كافية');
-      final rawUntracked = part['untrackedQuantity'];
-      final untrackedAvailable = rawUntracked == null
-          ? available
-          : rawUntracked is int
-              ? rawUntracked
-              : -1;
-      if (untrackedAvailable < 0 || untrackedAvailable > available) {
-        throw StateError('رصيد المخزون التاريخي غير صالح');
-      }
-
-      var remainingToAllocate = quantity;
-      final legacyQuantity = remainingToAllocate < untrackedAvailable
-          ? remainingToAllocate
-          : untrackedAvailable;
-      remainingToAllocate -= legacyQuantity;
-      final lines = <Map<String, dynamic>>[];
-      if (legacyQuantity > 0) {
-        lines.add({
-          'sourceType': 'legacy_untracked',
-          'lotId': null,
-          'receiptId': null,
-          'supplier': null,
-          'quantity': legacyQuantity,
-          'unitCost': null,
-          'totalCost': null,
-        });
-      }
-
-      final lotUpdates = <Map<String, dynamic>>[];
-      for (final lotDoc in lotDocs) {
-        if (remainingToAllocate <= 0) break;
-        final lotRef = db.collection('spare_part_lots').doc(lotDoc.id);
-        final balanceRef = db.collection('spare_part_lot_balances').doc(lotDoc.id);
-        final lotSnapshot = await transaction.get(lotRef);
-        final balanceSnapshot = await transaction.get(balanceRef);
-        if (!lotSnapshot.exists || !balanceSnapshot.exists) {
-          throw StateError('دفعة توريد أو رصيدها غير موجود؛ أوقف الصرف وراجع السجل');
-        }
-        final lot = lotSnapshot.data()!;
-        final balance = balanceSnapshot.data()!;
-        if (lot['partId'] != partId || lot['officeId'] != ticketOfficeId ||
-            balance['lotId'] != lotSnapshot.id ||
-            balance['partId'] != partId ||
-            balance['officeId'] != ticketOfficeId) {
-          throw StateError('بيانات دفعة المخزون غير متطابقة');
-        }
-        final remaining = balance['remainingQuantity'] is int
-            ? balance['remainingQuantity'] as int
-            : -1;
-        if (remaining < 0) throw StateError('رصيد دفعة التوريد غير صالح');
-        if (remaining == 0) continue;
-        final take = remainingToAllocate < remaining
-            ? remainingToAllocate
-            : remaining;
-        final lotUnitCost = (lot['unitCost'] as num?)?.toDouble() ?? double.nan;
-        if (!lotUnitCost.isFinite || lotUnitCost < 0) {
-          throw StateError('تكلفة دفعة التوريد غير صالحة');
-        }
-        if (lines.length >= 2) {
-          throw StateError('تتطلب هذه الحركة أكثر من مصدرين؛ قسّم الصرف إلى حركات أصغر');
-        }
-        final lineTotal = take * lotUnitCost;
-        if (!lineTotal.isFinite) {
-          throw StateError('إجمالي تكلفة دفعة التوريد يتجاوز النطاق الرقمي المسموح');
-        }
-        lines.add({
-          'sourceType': 'lot',
-          'lotId': lotSnapshot.id,
-          'receiptId': lot['receiptId'],
-          'supplier': lot['supplier'],
-          'quantity': take,
-          'unitCost': lotUnitCost,
-          'totalCost': lineTotal,
-        });
-        lotUpdates.add({
-          'ref': db.collection('spare_part_lot_balances').doc(lotSnapshot.id),
-          'remainingQuantity': remaining - take,
-        });
-        remainingToAllocate -= take;
-      }
-      if (remainingToAllocate > 0) {
-        throw StateError('الرصيد المسجل في دفعات التوريد لا يغطي الكمية المطلوبة');
-      }
-      final totalCost = lines.fold<double>(0, (runningTotal, line) =>
-          runningTotal + ((line['totalCost'] as num?)?.toDouble() ?? 0));
-      if (!totalCost.isFinite) {
-        throw StateError('إجمالي تكلفة الصرف يتجاوز النطاق الرقمي المسموح');
-      }
-      // A blended unit price would falsely assign the known lot cost to legacy units.
-      // Keep unitCost null unless every issued unit has a traceable lot cost.
-      final double? averageUnitCost = legacyQuantity == 0
-          ? totalCost / quantity
-          : null;
-      final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
-      final newPartsCost = previousPartsCost + totalCost;
-      if (!previousPartsCost.isFinite || previousPartsCost < 0 ||
-          !newPartsCost.isFinite ||
-          (averageUnitCost != null && !averageUnitCost.isFinite)) {
-        throw StateError('قيمة تكلفة القطع خارج النطاق الرقمي المسموح');
-      }
-      final now = FieldValue.serverTimestamp();
-
-      transaction.update(partRef, {
-        'quantity': available - quantity,
-        'untrackedQuantity': untrackedAvailable - legacyQuantity,
-        'lastUsageId': usageRef.id,
-        'updatedAt': now,
-      });
-      transaction.update(ticketRef, {
-        'partsCost': newPartsCost,
-        'lastPartsUsageId': usageRef.id,
-        'updatedAt': now,
-      });
-      for (final update in lotUpdates) {
-        transaction.update(update['ref'] as DocumentReference<Map<String, dynamic>>, {
-          'remainingQuantity': update['remainingQuantity'] as int,
-          'updatedAt': now,
-          'lastAllocationId': usageRef.id,
-        });
-      }
-      transaction.set(usageRef, {
+    if (_auth.currentUser == null) {
+      throw StateError('يجب تسجيل الدخول أولاً');
+    }
+    try {
+      await _functions.httpsCallable('consumeSparePart').call({
         'partId': partId,
-        'partName': part['name'] as String? ?? '',
         'maintenanceId': maintenanceId,
-        'assetId': assetId,
-        'officeId': ticketOfficeId,
         'quantity': quantity,
-        'unitCost': averageUnitCost,
-        'totalCost': totalCost,
         'notes': notes.trim(),
-        'usedAt': now,
-        'createdBy': uid,
-        'allocationId': allocationRef.id,
-        'allocationCount': lines.length,
-        'legacyQuantity': legacyQuantity,
-        'costAttributionComplete': legacyQuantity == 0,
       });
-      transaction.set(allocationRef, {
-        'usageId': usageRef.id,
-        'partId': partId,
-        'officeId': ticketOfficeId,
-        'maintenanceId': maintenanceId,
-        'assetId': assetId,
-        'quantity': quantity,
-        'totalCost': totalCost,
-        'lines': lines,
-        'createdAt': now,
-        'createdBy': uid,
-      });
-    });
+    } on FirebaseFunctionsException catch (error) {
+      throw StateError(error.message ?? 'تعذر إتمام صرف قطع الغيار');
+    }
   }
 
 }
