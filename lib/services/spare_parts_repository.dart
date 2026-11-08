@@ -289,7 +289,6 @@ class SparePartsRepository {
       });
       transaction.set(receiptRef, {
         'partId': partId,
-        'partName': part['name'] as String? ?? '',
         'officeId': officeId,
         'quantity': quantity,
         'quantityBefore': currentQuantity,
