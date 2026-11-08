@@ -912,7 +912,7 @@ test('spare part consumption requires one atomic stock, maintenance cost and usa
     tx.set(usageRef, {
       partId: 'parts-part-a', partName: 'SSD',
       maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 2, unitCost: 0, totalCost: 0,
+      officeId: 'office-a', quantity: 2, unitCost: null, totalCost: 0,
       notes: 'Replacement', usedAt: new Date(), createdBy: 'manager-1',
       allocationId: 'usage-valid', allocationCount: 1, legacyQuantity: 2,
       costAttributionComplete: false,
@@ -1210,7 +1210,7 @@ test('FIFO allocations consume legacy stock first and then the oldest supplier l
     tx.set(usageRef, {
       partId: 'fifo-part', partName: 'SSD',
       maintenanceId: 'fifo-ticket', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 7, unitCost: 50 / 7, totalCost: 50,
+      officeId: 'office-a', quantity: 7, unitCost: null, totalCost: 50,
       notes: 'Legacy + first FIFO lot', usedAt: now, createdBy: 'manager-1',
       allocationId: 'fifo-usage-1', allocationCount: 2,
       legacyQuantity: 2, costAttributionComplete: false,
