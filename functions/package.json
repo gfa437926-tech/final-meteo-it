@@ -7,7 +7,8 @@
     "node": "20"
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "plan:legacy-stock": "node scripts/plan-legacy-stock-backfill.js"
   },
   "dependencies": {
     "firebase-admin": "^13.0.2",
