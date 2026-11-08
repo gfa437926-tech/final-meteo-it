@@ -226,6 +226,8 @@ class SparePartsRepository {
         'name': cleanName,
         'sku': cleanSku,
         'quantity': quantity,
+        // Opening stock has no verifiable receipt, so retain it as untracked.
+        'untrackedQuantity': quantity,
         'minimumQuantity': minimumQuantity,
         'unitCost': unitCost,
         'supplier': supplier.trim(),
@@ -236,8 +238,9 @@ class SparePartsRepository {
   }
 
 
-  /// Atomically increases stock and appends an immutable receipt audit record.
-  /// The part's unitCost reflects the latest received batch price.
+  /// Atomically increases stock, appends its receipt, and creates a FIFO lot.
+  /// Existing stock without lot provenance remains untracked and is not assigned
+  /// a supplier or purchase cost by this operation.
   Future<void> restock({
     required String partId,
     required int quantity,
@@ -255,6 +258,8 @@ class SparePartsRepository {
     if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
     final partRef = parts.doc(partId);
     final receiptRef = db.collection('spare_part_receipts').doc();
+    final lotRef = db.collection('spare_part_lots').doc(receiptRef.id);
+    final balanceRef = db.collection('spare_part_lot_balances').doc(receiptRef.id);
     await db.runTransaction((transaction) async {
       final partSnapshot = await transaction.get(partRef);
       if (!partSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
@@ -268,11 +273,18 @@ class SparePartsRepository {
       if (!officeSnapshot.exists || officeSnapshot.data()?['isActive'] != true) {
         throw StateError('المكتب غير موجود أو غير نشط');
       }
-      final currentQuantity = part['quantity'] as int? ?? -1;
+      final currentQuantity = (part['quantity'] as num?)?.toInt() ?? -1;
       final currentUnitCost = (part['unitCost'] as num?)?.toDouble() ?? double.nan;
       if (currentQuantity < 0 || !currentUnitCost.isFinite ||
           currentUnitCost < 0) {
         throw StateError('بيانات رصيد أو تكلفة المخزون غير صالحة');
+      }
+      final rawUntracked = part['untrackedQuantity'];
+      final untrackedQuantity = rawUntracked is num
+          ? rawUntracked.toInt()
+          : currentQuantity;
+      if (untrackedQuantity < 0 || untrackedQuantity > currentQuantity) {
+        throw StateError('رصيد المخزون التاريخي غير صالح');
       }
       final newQuantity = currentQuantity + quantity;
       if (newQuantity < currentQuantity) {
@@ -282,6 +294,7 @@ class SparePartsRepository {
       final now = FieldValue.serverTimestamp();
       transaction.update(partRef, {
         'quantity': newQuantity,
+        'untrackedQuantity': untrackedQuantity,
         'unitCost': unitCost,
         'supplier': cleanSupplier,
         'lastRestockId': receiptRef.id,
@@ -290,6 +303,7 @@ class SparePartsRepository {
       transaction.set(receiptRef, {
         'partId': partId,
         'officeId': officeId,
+        'lotId': lotRef.id,
         'quantity': quantity,
         'quantityBefore': currentQuantity,
         'quantityAfter': newQuantity,
@@ -300,6 +314,27 @@ class SparePartsRepository {
         'receivedAt': Timestamp.fromDate(receivedAt),
         'createdAt': now,
         'createdBy': uid,
+      });
+      transaction.set(lotRef, {
+        'partId': partId,
+        'officeId': officeId,
+        'receiptId': receiptRef.id,
+        'supplier': cleanSupplier,
+        'receivedQuantity': quantity,
+        'unitCost': unitCost,
+        'totalCost': totalCost,
+        'receivedAt': Timestamp.fromDate(receivedAt),
+        'createdAt': now,
+        'createdBy': uid,
+      });
+      transaction.set(balanceRef, {
+        'lotId': lotRef.id,
+        'partId': partId,
+        'officeId': officeId,
+        'remainingQuantity': quantity,
+        'createdAt': now,
+        'updatedAt': now,
+        'lastAllocationId': null,
       });
     });
   }
@@ -316,7 +351,25 @@ class SparePartsRepository {
     final partRef = parts.doc(partId);
     final ticketRef = _tickets.doc(maintenanceId);
     final usageRef = db.collection('maintenance_parts').doc();
+    final allocationRef = db.collection('spare_part_allocations').doc(usageRef.id);
     final assetCollection = db.collection('assets');
+
+    // Read the immutable lot catalogue before opening the transaction. The
+    // part's lastRestockId is rechecked transactionally to detect a concurrent
+    // receipt that would otherwise be absent from this FIFO candidate list.
+    final initialPartSnapshot = await partRef.get();
+    if (!initialPartSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
+    final initialPart = initialPartSnapshot.data()!;
+    final officeId = initialPart['officeId'] as String? ?? '';
+    if (officeId.isEmpty) throw StateError('قطعة الغيار لا ترتبط بمكتب صالح');
+    final initialLastRestockId = initialPart['lastRestockId'];
+    final lotQuery = await db.collection('spare_part_lots')
+        .where('officeId', isEqualTo: officeId)
+        .where('partId', isEqualTo: partId)
+        .orderBy('receivedAt')
+        .orderBy('createdAt')
+        .limit(500)
+        .get();
 
     await db.runTransaction((transaction) async {
       final partSnapshot = await transaction.get(partRef);
@@ -326,69 +379,177 @@ class SparePartsRepository {
 
       final part = partSnapshot.data()!;
       final ticket = ticketSnapshot.data()!;
+      if (part['lastRestockId'] != initialLastRestockId) {
+        throw StateError('تغيرت دفعات التوريد أثناء تجهيز الصرف؛ أعد المحاولة');
+      }
       final status = ticket['status'] as String? ?? '';
       if (status != 'open' && status != 'inProgress') {
         throw StateError('لا يمكن صرف قطع غيار لطلب صيانة مغلق');
       }
 
       final assetId = ticket['assetId'] as String? ?? '';
-      final officeId = ticket['officeId'] as String? ?? '';
-      if (assetId.isEmpty || officeId.isEmpty) {
+      final ticketOfficeId = ticket['officeId'] as String? ?? '';
+      if (assetId.isEmpty || ticketOfficeId.isEmpty) {
         throw StateError('طلب الصيانة غير مرتبط بأصل ومكتب صالحين');
       }
       final assetRef = assetCollection.doc(assetId);
+      final officeRef = db.collection('offices').doc(ticketOfficeId);
       final assetSnapshot = await transaction.get(assetRef);
-      final officeRef = db.collection('offices').doc(officeId);
       final officeSnapshot = await transaction.get(officeRef);
       if (!assetSnapshot.exists || !officeSnapshot.exists ||
           officeSnapshot.data()?['isActive'] != true) {
         throw StateError('الأصل أو المكتب غير موجود أو غير نشط');
       }
-      if (assetSnapshot.data()?['officeId'] != officeId ||
-          part['officeId'] != officeId) {
+      if (assetSnapshot.data()?['officeId'] != ticketOfficeId ||
+          part['officeId'] != ticketOfficeId) {
         throw StateError('يجب أن تتطابق مكاتب القطعة وطلب الصيانة والأصل');
       }
       if (assetSnapshot.data()?['status'] != 'maintenance') {
         throw StateError('الأصل المرتبط ليس في حالة صيانة');
       }
 
-      final available = (part['quantity'] as num?)?.toInt() ?? 0;
+      final available = (part['quantity'] as num?)?.toInt() ?? -1;
       if (available < quantity) throw StateError('الكمية المتاحة غير كافية');
-      final unitCost = (part['unitCost'] as num?)?.toDouble() ?? 0;
-      if (!unitCost.isFinite || unitCost < 0) {
-        throw StateError('تكلفة القطعة المخزنة غير صالحة');
+      final rawUntracked = part['untrackedQuantity'];
+      final untrackedAvailable = rawUntracked is num
+          ? rawUntracked.toInt()
+          : available;
+      if (untrackedAvailable < 0 || untrackedAvailable > available) {
+        throw StateError('رصيد المخزون التاريخي غير صالح');
       }
-      final totalCost = unitCost * quantity;
+
+      final lotSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
+      final balanceSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
+      for (final lotDoc in lotQuery.docs) {
+        final lotRef = db.collection('spare_part_lots').doc(lotDoc.id);
+        final balanceRef = db.collection('spare_part_lot_balances').doc(lotDoc.id);
+        lotSnapshots.add(await transaction.get(lotRef));
+        balanceSnapshots.add(await transaction.get(balanceRef));
+      }
+
+      var remainingToAllocate = quantity;
+      final legacyQuantity = remainingToAllocate < untrackedAvailable
+          ? remainingToAllocate
+          : untrackedAvailable;
+      remainingToAllocate -= legacyQuantity;
+      final lines = <Map<String, dynamic>>[];
+      if (legacyQuantity > 0) {
+        lines.add({
+          'sourceType': 'legacy_untracked',
+          'lotId': null,
+          'receiptId': null,
+          'supplier': null,
+          'quantity': legacyQuantity,
+          'unitCost': null,
+          'totalCost': null,
+        });
+      }
+
+      final lotUpdates = <Map<String, dynamic>>[];
+      for (var i = 0; i < lotSnapshots.length && remainingToAllocate > 0; i++) {
+        final lotSnapshot = lotSnapshots[i];
+        final balanceSnapshot = balanceSnapshots[i];
+        if (!lotSnapshot.exists || !balanceSnapshot.exists) {
+          throw StateError('دفعة توريد أو رصيدها غير موجود؛ أوقف الصرف وراجع السجل');
+        }
+        final lot = lotSnapshot.data()!;
+        final balance = balanceSnapshot.data()!;
+        if (lot['partId'] != partId || lot['officeId'] != ticketOfficeId ||
+            balance['lotId'] != lotSnapshot.id ||
+            balance['partId'] != partId ||
+            balance['officeId'] != ticketOfficeId) {
+          throw StateError('بيانات دفعة المخزون غير متطابقة');
+        }
+        final remaining = (balance['remainingQuantity'] as num?)?.toInt() ?? -1;
+        if (remaining < 0) throw StateError('رصيد دفعة التوريد غير صالح');
+        if (remaining == 0) continue;
+        final take = remainingToAllocate < remaining
+            ? remainingToAllocate
+            : remaining;
+        final lotUnitCost = (lot['unitCost'] as num?)?.toDouble() ?? double.nan;
+        if (!lotUnitCost.isFinite || lotUnitCost < 0) {
+          throw StateError('تكلفة دفعة التوريد غير صالحة');
+        }
+        final lineTotal = take * lotUnitCost;
+        lines.add({
+          'sourceType': 'lot',
+          'lotId': lotSnapshot.id,
+          'receiptId': lot['receiptId'],
+          'supplier': lot['supplier'],
+          'quantity': take,
+          'unitCost': lotUnitCost,
+          'totalCost': lineTotal,
+        });
+        lotUpdates.add({
+          'ref': db.collection('spare_part_lot_balances').doc(lotSnapshot.id),
+          'remainingQuantity': remaining - take,
+        });
+        remainingToAllocate -= take;
+      }
+      if (remainingToAllocate > 0) {
+        throw StateError('الرصيد المسجل في دفعات التوريد لا يغطي الكمية المطلوبة');
+      }
+      if (lines.length > 5) {
+        throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
+      }
+
+      final totalCost = lines.fold<double>(0, (sum, line) =>
+          sum + ((line['totalCost'] as num?)?.toDouble() ?? 0));
+      final averageUnitCost = totalCost / quantity;
       final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
       if (!previousPartsCost.isFinite || previousPartsCost < 0) {
         throw StateError('تكلفة القطع السابقة غير صالحة');
       }
-      final usageId = usageRef.id;
       final now = FieldValue.serverTimestamp();
 
       transaction.update(partRef, {
         'quantity': available - quantity,
-        'lastUsageId': usageId,
+        'untrackedQuantity': untrackedAvailable - legacyQuantity,
+        'lastUsageId': usageRef.id,
         'updatedAt': now,
       });
       transaction.update(ticketRef, {
         'partsCost': previousPartsCost + totalCost,
-        'lastPartsUsageId': usageId,
+        'lastPartsUsageId': usageRef.id,
         'updatedAt': now,
       });
+      for (final update in lotUpdates) {
+        transaction.update(update['ref'] as DocumentReference<Map<String, dynamic>>, {
+          'remainingQuantity': update['remainingQuantity'] as int,
+          'updatedAt': now,
+          'lastAllocationId': usageRef.id,
+        });
+      }
       transaction.set(usageRef, {
         'partId': partId,
         'partName': part['name'] as String? ?? '',
         'maintenanceId': maintenanceId,
         'assetId': assetId,
-        'officeId': officeId,
+        'officeId': ticketOfficeId,
         'quantity': quantity,
-        'unitCost': unitCost,
+        'unitCost': averageUnitCost,
         'totalCost': totalCost,
         'notes': notes.trim(),
         'usedAt': now,
         'createdBy': uid,
+        'allocationId': allocationRef.id,
+        'allocationCount': lines.length,
+        'legacyQuantity': legacyQuantity,
+        'costAttributionComplete': legacyQuantity == 0,
+      });
+      transaction.set(allocationRef, {
+        'usageId': usageRef.id,
+        'partId': partId,
+        'officeId': ticketOfficeId,
+        'maintenanceId': maintenanceId,
+        'assetId': assetId,
+        'quantity': quantity,
+        'totalCost': totalCost,
+        'lines': lines,
+        'createdAt': now,
+        'createdBy': uid,
       });
     });
   }
+
 }
