@@ -1418,6 +1418,13 @@ test('immutable FIFO usage and allocation documents cannot be replayed to consum
       lastAllocationId: 'replay-usage-1',
     });
   }));
+
+  // A cost-only replay must not charge the same immutable usage twice.
+  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'replay-ticket'), {
+    partsCost: 50,
+    lastPartsUsageId: 'replay-usage-1',
+    updatedAt: new Date(),
+  }));
 });
 
 test('an immutable receipt cannot be replayed to increase stock a second time', async () => {
