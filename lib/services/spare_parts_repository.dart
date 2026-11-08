@@ -163,12 +163,10 @@ class SparePartsRepository {
         throw StateError('تجاوز الحد المسموح لكمية المخزون');
       }
       final totalCost = quantity * unitCost;
-      final averageCost =
-          ((currentQuantity * currentUnitCost) + totalCost) / newQuantity;
       final now = FieldValue.serverTimestamp();
       transaction.update(partRef, {
         'quantity': newQuantity,
-        'unitCost': averageCost,
+        'unitCost': unitCost,
         'supplier': cleanSupplier,
         'lastRestockId': receiptRef.id,
         'updatedAt': now,
