@@ -53,14 +53,18 @@ class SparePartsRepository {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchOpenTickets() =>
       _activeOfficeScope().asyncExpand((officeIds) {
-        Query<Map<String, dynamic>> query = _tickets
-            .where('status', whereIn: ['open', 'inProgress']);
-        if (officeIds == null) return query.snapshots();
-        if (officeIds.isEmpty) {
-          return query.where('officeId', isEqualTo: '__no_active_office__')
+        if (officeIds == null) {
+          return _tickets.where('status', whereIn: ['open', 'inProgress'])
               .snapshots();
         }
-        return query.where('officeId', whereIn: officeIds).snapshots();
+        if (officeIds.isEmpty) {
+          return _tickets.where('officeId', isEqualTo: '__no_active_office__')
+              .snapshots();
+        }
+        // Filter open status in the UI after the office-scoped query. Combining
+        // two whereIn filters can exceed Firestore's 30-disjunction limit when
+        // a manager has multiple assigned offices.
+        return _tickets.where('officeId', whereIn: officeIds).snapshots();
       });
 
   Future<void> _assertOfficeAssignment(String officeId) async {
