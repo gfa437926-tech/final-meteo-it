@@ -261,22 +261,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    function validPurchaseAttachment(data) {
+      let purchaseId = data.get('purchaseRecordId', null);
+      return purchaseId == null ||
+        (purchaseId is string &&
+         exists(/databases/$(database)/documents/purchase_records/$(purchaseId)) &&
+         get(/databases/$(database)/documents/purchase_records/$(purchaseId)).data.assetId == data.assetId &&
+         get(/databases/$(database)/documents/purchase_records/$(purchaseId)).data.officeId == data.officeId &&
+         linkedAssetOffice(data.assetId, data.officeId));
+    }
+
     match /asset_documents/{documentId} {
-      // The metadata record must resolve to the same office as its asset;
-      // a client-supplied officeId alone is never an authorization boundary.
+      // Metadata must match its linked asset and, when supplied, its purchase
+      // record. The client-provided officeId is never an authorization boundary.
       allow read: if isSuperAdmin() ||
         (resource.data.assetId is string &&
+         resource.data.officeId is string &&
          canAccessAssetId(resource.data.assetId) &&
          get(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.officeId ==
-           resource.data.officeId);
-      allow create: if isSuperAdmin() ||
-        (isAdmin() &&
-         request.resource.data.officeId is string &&
-         hasOfficeAccess(request.resource.data.officeId) &&
-         request.resource.data.assetId is string &&
-         canAccessAssetId(request.resource.data.assetId) &&
-         get(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeId ==
-           request.resource.data.officeId);
+           resource.data.officeId &&
+         validPurchaseAttachment(resource.data));
+      allow create: if request.resource.data.assetId is string &&
+        request.resource.data.officeId is string &&
+        validPurchaseAttachment(request.resource.data) &&
+        ((isSuperAdmin() &&
+          canAccessAssetId(request.resource.data.assetId) &&
+          get(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeId ==
+            request.resource.data.officeId) ||
+         (isAdmin() &&
+          hasOfficeAccess(request.resource.data.officeId) &&
+          canAccessAssetId(request.resource.data.assetId) &&
+          get(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeId ==
+            request.resource.data.officeId));
       allow update, delete: if false;
     }
 
