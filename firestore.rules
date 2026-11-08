@@ -359,40 +359,31 @@ service cloud.firestore {
       let restockId = request.resource.data.get('lastRestockId', null);
       let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(restockId);
       let receipt = getAfter(receiptPath).data;
-      let oldQuantity = resource.data.quantity;
       return restockId is string && existsAfter(receiptPath) &&
         request.resource.data.officeId == resource.data.officeId &&
-        receipt.partId == partId &&
-        receipt.officeId == resource.data.officeId &&
-        receipt.createdBy == request.auth.uid &&
-        receipt.quantityBefore == oldQuantity &&
-        receipt.quantityAfter == request.resource.data.quantity &&
-        receipt.quantity is int && receipt.quantity > 0 &&
-        request.resource.data.quantity == oldQuantity + receipt.quantity &&
-        receipt.unitCost is number && receipt.unitCost >= 0 &&
-        receipt.totalCost == receipt.quantity * receipt.unitCost &&
-        request.resource.data.unitCost ==
-          ((oldQuantity * resource.data.unitCost) + receipt.totalCost) /
-            request.resource.data.quantity &&
-        request.resource.data.supplier == receipt.supplier &&
-        request.resource.data.lastRestockId == restockId &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['quantity', 'unitCost', 'supplier', 'lastRestockId', 'updatedAt']) &&
-        request.resource.data.updatedAt is timestamp &&
-        receipt.receivedAt is timestamp &&
-        receipt.createdAt is timestamp &&
-        receipt.supplier is string && receipt.supplier.size() > 0 &&
-        receipt.notes is string &&
-        receipt.keys().hasOnly([
-          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
-          'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
-          'createdAt', 'createdBy'
-        ]) &&
         receipt.keys().hasAll([
           'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
         ]) &&
+        receipt.partId == partId &&
+        receipt.officeId == resource.data.officeId &&
+        receipt.createdBy == request.auth.uid &&
+        receipt.quantity is int && receipt.quantity > 0 &&
+        receipt.quantityBefore == resource.data.quantity &&
+        receipt.quantityAfter == request.resource.data.quantity &&
+        request.resource.data.quantity == resource.data.quantity + receipt.quantity &&
+        receipt.unitCost is number && receipt.unitCost >= 0 &&
+        receipt.totalCost == receipt.quantity * receipt.unitCost &&
+        request.resource.data.unitCost == receipt.unitCost &&
+        request.resource.data.supplier == receipt.supplier &&
+        receipt.supplier is string && receipt.supplier.size() > 0 &&
+        receipt.notes is string &&
+        receipt.receivedAt is timestamp && receipt.createdAt is timestamp &&
+        request.resource.data.lastRestockId == restockId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['quantity', 'unitCost', 'supplier', 'lastRestockId', 'updatedAt']) &&
+        request.resource.data.updatedAt is timestamp &&
         hasOfficeAccess(resource.data.officeId);
     }
 
