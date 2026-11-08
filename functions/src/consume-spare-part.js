@@ -88,11 +88,8 @@ export async function consumeSparePartCore({ db, uid, data, FieldValue }) {
     }
 
     const available = part.quantity;
-    const untrackedRaw = part.untrackedQuantity;
-    const untracked = untrackedRaw === undefined ? available : untrackedRaw;
-    if (!Number.isSafeInteger(available) || available < 0 ||
-        !Number.isSafeInteger(untracked) || untracked < 0 || untracked > available) {
-      fail('failed-precondition', 'رصيد المخزون أو الرصيد التاريخي غير صالح');
+    if (!Number.isSafeInteger(available) || available < 0) {
+      fail('failed-precondition', 'رصيد المخزون غير صالح');
     }
     if (available < quantity) fail('failed-precondition', 'الكمية المتاحة غير كافية');
 
@@ -101,8 +98,73 @@ export async function consumeSparePartCore({ db, uid, data, FieldValue }) {
       .where('partId', '==', partId)
       .orderBy('receivedAt', 'asc')
       .orderBy('createdAt', 'asc')
-      .limit(MAX_LOTS_PER_TRANSACTION);
+      .limit(MAX_LOTS_PER_TRANSACTION + 1);
     const lotsSnapshot = await transaction.get(lotsQuery);
+    if (lotsSnapshot.size > MAX_LOTS_PER_TRANSACTION) {
+      fail('resource-exhausted', 'تجاوز عدد دفعات القطعة حد المعاملة؛ راجع تجزئة المخزون قبل الصرف');
+    }
+
+    // Read and validate every balance/receipt for this part before any write.
+    // This proves the part total reconciles with tracked lots plus legacy stock.
+    const lotRecords = await Promise.all(lotsSnapshot.docs.map(async (lotDocument) => {
+      const lot = lotDocument.data();
+      if (!isNonEmptyString(lot.receiptId) || lot.receiptId !== lotDocument.id) {
+        fail('failed-precondition', 'دفعة التوريد لا ترتبط بإيصال صالح');
+      }
+      const balanceRef = db.collection('spare_part_lot_balances').doc(lotDocument.id);
+      const receiptRef = db.collection('spare_part_receipts').doc(lot.receiptId);
+      const [balanceSnapshot, receiptSnapshot] = await Promise.all([
+        transaction.get(balanceRef),
+        transaction.get(receiptRef),
+      ]);
+      if (!balanceSnapshot.exists || !receiptSnapshot.exists) {
+        fail('failed-precondition', 'دفعة توريد أو رصيدها أو إيصالها مفقود؛ أوقف الصرف وراجع السجل');
+      }
+      const balance = balanceSnapshot.data();
+      const receipt = receiptSnapshot.data();
+      const remaining = balance.remainingQuantity;
+      if (lot.partId !== partId || lot.officeId !== officeId ||
+          balance.lotId !== lotDocument.id ||
+          balance.partId !== partId || balance.officeId !== officeId ||
+          !Number.isSafeInteger(lot.receivedQuantity) || lot.receivedQuantity <= 0 ||
+          !Number.isFinite(lot.unitCost) || lot.unitCost < 0 ||
+          !Number.isFinite(lot.totalCost) ||
+          lot.totalCost !== lot.receivedQuantity * lot.unitCost ||
+          !isNonEmptyString(lot.supplier) || !isNonEmptyString(lot.createdBy) ||
+          typeof lot.receivedAt?.toMillis !== 'function' ||
+          typeof lot.createdAt?.toMillis !== 'function' ||
+          !Number.isSafeInteger(remaining) || remaining < 0 ||
+          remaining > lot.receivedQuantity ||
+          receipt.partId !== partId || receipt.officeId !== officeId ||
+          receipt.lotId !== lotDocument.id ||
+          receipt.quantity !== lot.receivedQuantity ||
+          !Number.isSafeInteger(receipt.quantityBefore) || receipt.quantityBefore < 0 ||
+          receipt.quantityAfter !== receipt.quantityBefore + receipt.quantity ||
+          receipt.supplier !== lot.supplier ||
+          receipt.unitCost !== lot.unitCost ||
+          receipt.totalCost !== lot.totalCost ||
+          receipt.createdBy !== lot.createdBy ||
+          receipt.createdAt?.toMillis?.() !== lot.createdAt.toMillis() ||
+          receipt.receivedAt?.toMillis?.() !== lot.receivedAt.toMillis()) {
+        fail('failed-precondition', 'بيانات دفعة التوريد لا تطابق إيصالها أو رصيدها');
+      }
+      return { id: lotDocument.id, lot, balanceRef, remaining };
+    }));
+
+    const trackedBalance = lotRecords.reduce((sum, record) =>
+      sum + record.remaining, 0);
+    if (!Number.isSafeInteger(trackedBalance)) {
+      fail('failed-precondition', 'مجموع أرصدة دفعات المخزون غير صالح');
+    }
+    const untrackedRaw = part.untrackedQuantity;
+    if (untrackedRaw == null && lotRecords.length > 0) {
+      fail('failed-precondition', 'يلزم تهيئة الرصيد التاريخي للقطعة قبل صرف الدفعات الموثقة');
+    }
+    const untracked = untrackedRaw == null ? available : untrackedRaw;
+    if (!Number.isSafeInteger(untracked) || untracked < 0 ||
+        untracked > available || untracked + trackedBalance !== available) {
+      fail('failed-precondition', 'رصيد المخزون لا يتطابق مع الرصيد التاريخي ومجموع أرصدة الدفعات');
+    }
 
     let remainingToAllocate = quantity;
     const legacyQuantity = Math.min(remainingToAllocate, untracked);
@@ -121,73 +183,32 @@ export async function consumeSparePartCore({ db, uid, data, FieldValue }) {
     }
 
     const balanceUpdates = [];
-    for (const lotDocument of lotsSnapshot.docs) {
+    for (const record of lotRecords) {
       if (remainingToAllocate === 0) break;
-      const lot = lotDocument.data();
-      if (!isNonEmptyString(lot.receiptId)) {
-        fail('failed-precondition', 'دفعة التوريد لا ترتبط بإيصال صالح');
-      }
-      const balanceRef = db.collection('spare_part_lot_balances').doc(lotDocument.id);
-      const receiptRef = db.collection('spare_part_receipts').doc(lot.receiptId);
-      const [balanceSnapshot, receiptSnapshot] = await Promise.all([
-        transaction.get(balanceRef),
-        transaction.get(receiptRef),
-      ]);
-      if (!balanceSnapshot.exists || !receiptSnapshot.exists) {
-        fail('failed-precondition', 'دفعة توريد أو رصيدها أو إيصالها مفقود؛ أوقف الصرف وراجع السجل');
-      }
-      const balance = balanceSnapshot.data();
-      const receipt = receiptSnapshot.data();
-      const remaining = balance.remainingQuantity;
-      if (lot.partId !== partId || lot.officeId !== officeId ||
-          lot.receiptId !== lotDocument.id ||
-          balance.lotId !== lotDocument.id ||
-          balance.partId !== partId || balance.officeId !== officeId ||
-          !Number.isSafeInteger(remaining) || remaining < 0 ||
-          remaining > lot.receivedQuantity ||
-          receipt.partId !== partId || receipt.officeId !== officeId ||
-          receipt.lotId !== lotDocument.id ||
-          receipt.quantity !== lot.receivedQuantity ||
-          !Number.isSafeInteger(receipt.quantityBefore) || receipt.quantityBefore < 0 ||
-          receipt.quantityAfter !== receipt.quantityBefore + receipt.quantity ||
-          receipt.supplier !== lot.supplier ||
-          receipt.unitCost !== lot.unitCost ||
-          receipt.totalCost !== lot.totalCost ||
-          lot.totalCost !== lot.receivedQuantity * lot.unitCost ||
-          receipt.createdBy !== lot.createdBy ||
-          receipt.createdAt?.toMillis?.() !== lot.createdAt?.toMillis?.() ||
-          receipt.receivedAt?.toMillis?.() !== lot.receivedAt?.toMillis?.()) {
-        fail('failed-precondition', 'بيانات دفعة التوريد لا تطابق إيصالها أو رصيدها');
-      }
-      if (remaining === 0) continue;
-
-      const take = Math.min(remainingToAllocate, remaining);
-      const unitCost = lot.unitCost;
-      if (typeof unitCost !== 'number' || !Number.isFinite(unitCost) || unitCost < 0 ||
-          !isNonEmptyString(lot.supplier)) {
-        fail('failed-precondition', 'بيانات المورد أو تكلفة دفعة التوريد غير صالحة');
-      }
+      if (record.remaining === 0) continue;
+      const take = Math.min(remainingToAllocate, record.remaining);
+      const unitCost = record.lot.unitCost;
       const totalCost = take * unitCost;
       if (!Number.isFinite(totalCost)) {
-        fail('failed-precondition', 'إجمالي تكلفة الصرف يتجاوز النطاق الرقمي');
+        fail('failed-precondition', 'إجمالي تكلفة دفعة التوريد يتجاوز النطاق الرقمي');
       }
       lines.push({
         sourceType: 'lot',
-        lotId: lotDocument.id,
-        receiptId: lot.receiptId,
-        supplier: lot.supplier,
+        lotId: record.id,
+        receiptId: record.lot.receiptId,
+        supplier: record.lot.supplier,
         quantity: take,
         unitCost,
         totalCost,
       });
-      balanceUpdates.push({ ref: balanceRef, remainingQuantity: remaining - take });
+      balanceUpdates.push({
+        ref: record.balanceRef,
+        remainingQuantity: record.remaining - take,
+      });
       remainingToAllocate -= take;
     }
 
     if (remainingToAllocate > 0) {
-      if (lotsSnapshot.size === MAX_LOTS_PER_TRANSACTION) {
-        fail('resource-exhausted', 'تجاوز عدد دفعات الصرف حد المعاملة؛ قسّم الصرف إلى حركات أصغر');
-      }
       fail('failed-precondition', 'أرصدة الدفعات الموثقة لا تغطي الكمية المطلوبة');
     }
 
