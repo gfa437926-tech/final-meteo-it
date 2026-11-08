@@ -500,8 +500,8 @@ class SparePartsRepository {
         if (!lotUnitCost.isFinite || lotUnitCost < 0) {
           throw StateError('تكلفة دفعة التوريد غير صالحة');
         }
-        if (lines.length >= 5) {
-          throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
+        if (lines.length >= 2) {
+          throw StateError('تتطلب هذه الحركة أكثر من مصدرين؛ قسّم الصرف إلى حركات أصغر');
         }
         final lineTotal = take * lotUnitCost;
         lines.add({
@@ -522,7 +522,7 @@ class SparePartsRepository {
       if (remainingToAllocate > 0) {
         throw StateError('الرصيد المسجل في دفعات التوريد لا يغطي الكمية المطلوبة');
       }
-      if (lines.length > 5) {
+      if (lines.length > 2) {
         throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
       }
 
