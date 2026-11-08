@@ -287,6 +287,164 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
   }
 
 
+
+  Future<void> _showMovementReport() async {
+    final now = DateTime.now();
+    final pickedRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: DateTimeRange(
+        start: now.subtract(const Duration(days: 29)),
+        end: now,
+      ),
+      helpText: 'اختر فترة تقرير المخزون',
+      saveText: 'عرض التقرير',
+    );
+    if (pickedRange == null || !mounted) return;
+
+    try {
+      final offices = (await OfficeRepository().watchOffices().first)
+          .where((office) => office.isActive).toList();
+      final events = await repository.loadMovementReport(
+        start: DateTime(pickedRange.start.year, pickedRange.start.month,
+            pickedRange.start.day),
+        endExclusive: DateTime(pickedRange.end.year, pickedRange.end.month,
+            pickedRange.end.day).add(const Duration(days: 1)),
+      );
+      if (!mounted) return;
+      final officeNames = {for (final office in offices) office.id: office.name};
+      final suppliers = events.where((e) => e['isIncoming'] == true)
+          .map((e) => e['supplier'] as String? ?? '')
+          .where((s) => s.isNotEmpty).toSet().toList()..sort();
+      String? selectedOffice;
+      String? selectedSupplier;
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialog) {
+            final officeEvents = events.where((e) =>
+              selectedOffice == null || e['officeId'] == selectedOffice).toList();
+            final incoming = officeEvents.where((e) =>
+              e['isIncoming'] == true &&
+              (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
+            final outgoing = officeEvents.where((e) => e['isIncoming'] == false).toList();
+            int quantityOf(List<Map<String, dynamic>> rows) =>
+                rows.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
+            double costOf(List<Map<String, dynamic>> rows) =>
+                rows.fold<double>(0, (sum, row) => sum + (row['totalCost'] as double));
+            final officeIds = officeEvents.map((e) => e['officeId'] as String? ?? '')
+                .where((id) => id.isNotEmpty).toSet().toList()..sort();
+            final supplierTotals = <String, List<Map<String, dynamic>>>{};
+            for (final event in officeEvents.where((e) => e['isIncoming'] == true)) {
+              final name = event['supplier'] as String? ?? 'غير محدد';
+              supplierTotals.putIfAbsent(name, () => <Map<String, dynamic>>[]).add(event);
+            }
+            return AlertDialog(
+              title: const Text('تقرير مقارنة التوريد والصرف'),
+              content: SizedBox(
+                width: 760,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('الفترة: ${pickedRange.start.toLocal().toString().split(' ').first} — ${pickedRange.end.toLocal().toString().split(' ').first}'),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: selectedOffice,
+                        decoration: const InputDecoration(labelText: 'المكتب'),
+                        items: [
+                          const DropdownMenuItem<String>(value: null, child: Text('جميع المكاتب المصرح بها')),
+                          ...offices.map((office) => DropdownMenuItem(
+                            value: office.id, child: Text(office.name),
+                          )),
+                        ],
+                        onChanged: (value) => setDialog(() => selectedOffice = value),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedSupplier,
+                        decoration: const InputDecoration(labelText: 'المورد (يطبق على الوارد فقط)'),
+                        items: [
+                          const DropdownMenuItem<String>(value: null, child: Text('جميع الموردين')),
+                          ...suppliers.map((supplier) => DropdownMenuItem(
+                            value: supplier, child: Text(supplier),
+                          )),
+                        ],
+                        onChanged: (value) => setDialog(() => selectedSupplier = value),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        _historyMetric('الكمية المستلمة', quantityOf(incoming).toString()),
+                        _historyMetric('تكلفة التوريد', costOf(incoming).toStringAsFixed(2)),
+                        _historyMetric('الكمية المصروفة', quantityOf(outgoing).toString()),
+                        _historyMetric('قيمة الصرف', costOf(outgoing).toStringAsFixed(2)),
+                      ]),
+                      const Divider(height: 24),
+                      const Text('المقارنة حسب المكتب', style: TextStyle(fontWeight: FontWeight.bold)),
+                      if (officeIds.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('لا توجد حركات خلال الفترة المحددة.'),
+                        )
+                      else
+                        ...officeIds.map((id) {
+                          final rows = officeEvents.where((e) => e['officeId'] == id).toList();
+                          final receivedRows = rows.where((e) =>
+                            e['isIncoming'] == true &&
+                            (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
+                          final issuedRows = rows.where((e) => e['isIncoming'] == false).toList();
+                          return Card(
+                            child: ListTile(
+                              title: Text(officeNames[id] ?? id),
+                              subtitle: Text('وارد: ${quantityOf(receivedRows)} • تكلفة: ${costOf(receivedRows).toStringAsFixed(2)}\n'
+                                  'منصرف: ${quantityOf(issuedRows)} • قيمة: ${costOf(issuedRows).toStringAsFixed(2)}'),
+                            ),
+                          );
+                        }),
+                      const Divider(height: 24),
+                      const Text('تفصيل التوريد حسب المورد', style: TextStyle(fontWeight: FontWeight.bold)),
+                      if (supplierTotals.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('لا توجد إيصالات توريد في الفترة.'),
+                        )
+                      else
+                        ...supplierTotals.entries.where((entry) =>
+                          selectedSupplier == null || entry.key == selectedSupplier).map((entry) =>
+                          ListTile(
+                            dense: true,
+                            title: Text(entry.key),
+                            trailing: Text('${quantityOf(entry.value)} وحدة • ${costOf(entry.value).toStringAsFixed(2)}'),
+                          )),
+                      const SizedBox(height: 8),
+                      const Text('ملاحظة: المورد مرتبط بإيصال التوريد فقط. حركات الصرف تُقارن على مستوى المكتب والفترة؛ لا تُنسب إلى مورد محدد لعدم وجود تتبع دفعات/تشغيلات في نموذج الصرف الحالي.',
+                          style: TextStyle(fontSize: 12)),
+                      const SizedBox(height: 8),
+                      const Text('التقرير للقراءة فقط، ويُبنى من إيصالات التوريد وسجلات الصرف الأصلية غير القابلة للتعديل أو الحذف.',
+                          style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+              ],
+            );
+          },
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر إنشاء تقرير المخزون: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _showMovementHistory(QueryDocumentSnapshot<Map<String, dynamic>> part) async {
     final data = part.data();
     final officeId = data['officeId'] as String? ?? '';
@@ -446,7 +604,16 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('مخزون قطع الغيار')),
+        appBar: AppBar(
+          title: const Text('مخزون قطع الغيار'),
+          actions: [
+            IconButton(
+              tooltip: 'تقارير التوريد والصرف',
+              onPressed: _showMovementReport,
+              icon: const Icon(Icons.assessment_outlined),
+            ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _addPart,
           icon: const Icon(Icons.add),
