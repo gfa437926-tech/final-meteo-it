@@ -365,11 +365,11 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         final incoming = rows.where((row) => row['isIncoming'] == true).toList();
         final outgoing = rows.where((row) => row['isIncoming'] != true).toList();
         int quantityOf(List<Map<String, dynamic>> values) =>
-            values.fold<int>(0, (sum, row) =>
-                sum + ((row['quantity'] as num?)?.toInt() ?? 0));
+            values.fold<int>(0, (runningTotal, row) =>
+                runningTotal + ((row['quantity'] as num?)?.toInt() ?? 0));
         double costOf(List<Map<String, dynamic>> values) =>
-            values.fold<double>(0, (sum, row) =>
-                sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+            values.fold<double>(0, (runningTotal, row) =>
+                runningTotal + ((row['totalCost'] as num?)?.toDouble() ?? 0));
         summary.appendRow([
           TextCellValue(key),
           IntCellValue(quantityOf(incoming)),
