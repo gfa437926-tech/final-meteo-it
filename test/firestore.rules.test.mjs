@@ -816,3 +816,145 @@ test('purchase records are immutable after creation', async () => {
   }));
   await assertFails(deleteDoc(doc(manager, 'purchase_records', 'immutable-purchase')));
 });
+
+
+test('spare stock is office-scoped and managers cannot forge stock office assignments', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const stock = {
+      name: 'SSD', sku: 'SSD-1', quantity: 12, minimumQuantity: 2,
+      unitCost: 25, supplier: 'Supplier', createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await setDoc(doc(db, 'spare_parts', 'part-a'), {
+      ...stock, officeId: 'office-a',
+    });
+    await setDoc(doc(db, 'spare_parts', 'part-b'), {
+      ...stock, officeId: 'office-b',
+    });
+  });
+
+  await assertSucceeds(getDoc(doc(managerA, 'spare_parts', 'part-a')));
+  await assertFails(getDoc(doc(managerA, 'spare_parts', 'part-b')));
+  await assertSucceeds(getDoc(doc(managerB, 'spare_parts', 'part-b')));
+  await assertFails(getDocs(collection(managerA, 'spare_parts')));
+  await assertSucceeds(getDocs(query(
+    collection(managerA, 'spare_parts'), where('officeId', '==', 'office-a'),
+  )));
+  await assertSucceeds(getDocs(collection(admin, 'spare_parts')));
+
+  const newPart = {
+    officeId: 'office-a', name: 'RAM', sku: 'RAM-1', quantity: 5,
+    minimumQuantity: 1, unitCost: 10, supplier: '',
+    createdAt: new Date(), updatedAt: new Date(),
+  };
+  await assertSucceeds(setDoc(doc(managerA, 'spare_parts', 'part-a-new'), newPart));
+  await assertFails(setDoc(doc(managerA, 'spare_parts', 'part-forged-office'), {
+    ...newPart, officeId: 'office-b',
+  }));
+});
+
+test('spare part consumption requires one atomic stock, maintenance cost and usage transaction', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
+    await setDoc(doc(db, 'maintenance_records', 'parts-maintenance-a'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'Repair',
+      status: 'open', previousAssetStatus: 'available',
+      partsCost: 0, reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'spare_parts', 'parts-part-a'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-1',
+      quantity: 10, minimumQuantity: 2, unitCost: 5,
+      supplier: 'Supplier', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+
+  // None of the three legs may be written independently.
+  await assertFails(updateDoc(doc(manager, 'spare_parts', 'parts-part-a'), {
+    quantity: 8, updatedAt: new Date(),
+  }));
+  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'parts-maintenance-a'), {
+    partsCost: 10, updatedAt: new Date(), lastPartsUsageId: 'usage-cost-only',
+  }));
+  await assertFails(setDoc(doc(manager, 'maintenance_parts', 'usage-only'), {
+    partId: 'parts-part-a', partName: 'SSD',
+    maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
+    officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
+    notes: '', usedAt: new Date(),
+  }));
+
+  await assertSucceeds(runTransaction(manager, async (tx) => {
+    const partRef = doc(manager, 'spare_parts', 'parts-part-a');
+    const ticketRef = doc(manager, 'maintenance_records', 'parts-maintenance-a');
+    const assetRef = doc(manager, 'assets', 'asset-1');
+    const usageRef = doc(manager, 'maintenance_parts', 'usage-valid');
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    const asset = await tx.get(assetRef);
+    assert.equal(part.data().quantity, 10);
+    assert.equal(ticket.data().partsCost, 0);
+    assert.equal(asset.data().officeId, 'office-a');
+    tx.update(partRef, {
+      quantity: 8, lastUsageId: 'usage-valid', updatedAt: new Date(),
+    });
+    tx.update(ticketRef, {
+      partsCost: 10, lastPartsUsageId: 'usage-valid', updatedAt: new Date(),
+    });
+    tx.set(usageRef, {
+      partId: 'parts-part-a', partName: 'SSD',
+      maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
+      officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
+      notes: 'Replacement', usedAt: new Date(),
+    });
+  }));
+
+  const partAfter = await getDoc(doc(manager, 'spare_parts', 'parts-part-a'));
+  const ticketAfter = await getDoc(doc(manager, 'maintenance_records', 'parts-maintenance-a'));
+  assert.equal(partAfter.data().quantity, 8);
+  assert.equal(ticketAfter.data().partsCost, 10);
+});
+
+test('spare usage cannot connect a part, maintenance ticket and asset across offices', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await updateDoc(doc(db, 'assets', 'asset-b'), { status: 'maintenance' });
+    await setDoc(doc(db, 'maintenance_records', 'parts-maintenance-b'), {
+      assetId: 'asset-b', officeId: 'office-b', title: 'Office B repair',
+      status: 'open', previousAssetStatus: 'available',
+      partsCost: 0, reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'spare_parts', 'parts-part-b'), {
+      officeId: 'office-b', name: 'RAM', sku: 'RAM-B',
+      quantity: 4, minimumQuantity: 1, unitCost: 3,
+      supplier: 'Supplier B', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+
+  await assertFails(runTransaction(managerA, async (tx) => {
+    const partRef = doc(managerA, 'spare_parts', 'parts-part-b');
+    const ticketRef = doc(managerA, 'maintenance_records', 'parts-maintenance-b');
+    const usageRef = doc(managerA, 'maintenance_parts', 'cross-office-usage');
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    tx.update(partRef, {
+      quantity: part.data().quantity - 1,
+      lastUsageId: 'cross-office-usage', updatedAt: new Date(),
+    });
+    tx.update(ticketRef, {
+      partsCost: 3, lastPartsUsageId: 'cross-office-usage',
+      updatedAt: new Date(),
+    });
+    tx.set(usageRef, {
+      partId: 'parts-part-b', partName: 'RAM',
+      maintenanceId: 'parts-maintenance-b', assetId: 'asset-b',
+      officeId: 'office-b', quantity: 1, unitCost: 3, totalCost: 3,
+      notes: '', usedAt: new Date(),
+    });
+  }));
+});
