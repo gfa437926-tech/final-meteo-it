@@ -289,16 +289,20 @@ class SparePartsRepository {
       if (!officeSnapshot.exists || officeSnapshot.data()?['isActive'] != true) {
         throw StateError('المكتب غير موجود أو غير نشط');
       }
-      final currentQuantity = (part['quantity'] as num?)?.toInt() ?? -1;
+      final currentQuantity = part['quantity'] is int
+          ? part['quantity'] as int
+          : -1;
       final currentUnitCost = (part['unitCost'] as num?)?.toDouble() ?? double.nan;
       if (currentQuantity < 0 || !currentUnitCost.isFinite ||
           currentUnitCost < 0) {
         throw StateError('بيانات رصيد أو تكلفة المخزون غير صالحة');
       }
       final rawUntracked = part['untrackedQuantity'];
-      final untrackedQuantity = rawUntracked is num
-          ? rawUntracked.toInt()
-          : currentQuantity;
+      final untrackedQuantity = rawUntracked == null
+          ? currentQuantity
+          : rawUntracked is int
+              ? rawUntracked
+              : -1;
       if (untrackedQuantity < 0 || untrackedQuantity > currentQuantity) {
         throw StateError('رصيد المخزون التاريخي غير صالح');
       }
@@ -434,12 +438,16 @@ class SparePartsRepository {
         throw StateError('الأصل المرتبط ليس في حالة صيانة');
       }
 
-      final available = (part['quantity'] as num?)?.toInt() ?? -1;
+      final available = part['quantity'] is int
+          ? part['quantity'] as int
+          : -1;
       if (available < quantity) throw StateError('الكمية المتاحة غير كافية');
       final rawUntracked = part['untrackedQuantity'];
-      final untrackedAvailable = rawUntracked is num
-          ? rawUntracked.toInt()
-          : available;
+      final untrackedAvailable = rawUntracked == null
+          ? available
+          : rawUntracked is int
+              ? rawUntracked
+              : -1;
       if (untrackedAvailable < 0 || untrackedAvailable > available) {
         throw StateError('رصيد المخزون التاريخي غير صالح');
       }
@@ -480,7 +488,9 @@ class SparePartsRepository {
             balance['officeId'] != ticketOfficeId) {
           throw StateError('بيانات دفعة المخزون غير متطابقة');
         }
-        final remaining = (balance['remainingQuantity'] as num?)?.toInt() ?? -1;
+        final remaining = balance['remainingQuantity'] is int
+            ? balance['remainingQuantity'] as int
+            : -1;
         if (remaining < 0) throw StateError('رصيد دفعة التوريد غير صالح');
         if (remaining == 0) continue;
         final take = remainingToAllocate < remaining
