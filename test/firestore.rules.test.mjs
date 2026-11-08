@@ -1387,6 +1387,48 @@ test('immutable FIFO usage and allocation documents cannot be replayed to consum
   await issue('replay-usage-1', 2);
   await issue('replay-usage-2', 1);
 
+  // A new allocation cannot claim a lot deduction unless the balance changes
+  // by the exact quantity in the same atomic transaction.
+  await assertFails(runTransaction(manager, async (tx) => {
+    const partRef = doc(manager, 'spare_parts', 'replay-part');
+    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
+    const usageRef = doc(manager, 'maintenance_parts', 'replay-usage-forged');
+    const allocationRef = doc(manager, 'spare_part_allocations', 'replay-usage-forged');
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    const totalCost = 10;
+    const now = new Date();
+    tx.update(partRef, {
+      quantity: part.data().quantity - 1,
+      untrackedQuantity: 0,
+      lastUsageId: 'replay-usage-forged',
+      updatedAt: now,
+    });
+    tx.update(ticketRef, {
+      partsCost: ticket.data().partsCost + totalCost,
+      lastPartsUsageId: 'replay-usage-forged',
+      updatedAt: now,
+    });
+    tx.set(usageRef, {
+      partId: 'replay-part', partName: 'SSD',
+      maintenanceId: 'replay-ticket', assetId: 'asset-1',
+      officeId: 'office-a', quantity: 1, unitCost: 10, totalCost,
+      notes: '', usedAt: now, createdBy: 'manager-1',
+      allocationId: 'replay-usage-forged', allocationCount: 1,
+      legacyQuantity: 0, costAttributionComplete: true,
+    });
+    tx.set(allocationRef, {
+      usageId: 'replay-usage-forged', partId: 'replay-part',
+      officeId: 'office-a', maintenanceId: 'replay-ticket',
+      assetId: 'asset-1', quantity: 1, totalCost,
+      lines: [{
+        sourceType: 'lot', lotId: 'replay-lot', receiptId: 'replay-receipt',
+        supplier: 'Replay Supplier', quantity: 1, unitCost: 10, totalCost,
+      }],
+      createdAt: now, createdBy: 'manager-1',
+    });
+  }));
+
   // Reusing an old allocation to decrement its lot balance again is denied.
   await assertFails(updateDoc(doc(manager, 'spare_part_lot_balances', 'replay-lot'), {
     remainingQuantity: 5, updatedAt: new Date(),
