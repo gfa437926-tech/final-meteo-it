@@ -413,9 +413,12 @@ service cloud.firestore {
     }
 
     match /maintenance_records/{recordId} {
+      // officeId is the queryable tenant boundary. Creation and every
+      // client update still validate the linked asset's office; records
+      // without officeId remain administrator-only.
       allow read: if isSuperAdmin() ||
-        (resource.data.keys().hasAll(['assetId', 'officeId']) &&
-         linkedAssetOffice(resource.data.assetId, resource.data.officeId));
+        (resource.data.officeId is string &&
+         hasOfficeAccess(resource.data.officeId));
       allow create: if isAdmin() &&
         request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
         linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
