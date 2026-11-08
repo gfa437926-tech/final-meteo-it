@@ -94,10 +94,14 @@ class SparePartsRepository {
       if (user['role'] != 'it_manager' || assigned.isEmpty) {
         throw StateError('لا توجد مكاتب مخولة للتقرير');
       }
-      final active = await db.collection('offices')
-          .where(FieldPath.documentId, whereIn: assigned)
-          .where('isActive', isEqualTo: true).get();
-      allowedOffices = active.docs.map((doc) => doc.id).toList();
+      allowedOffices = <String>[];
+      for (var offset = 0; offset < assigned.length; offset += 30) {
+        final officeBatch = assigned.skip(offset).take(30).toList();
+        final active = await db.collection('offices')
+            .where(FieldPath.documentId, whereIn: officeBatch)
+            .where('isActive', isEqualTo: true).get();
+        allowedOffices.addAll(active.docs.map((doc) => doc.id));
+      }
     }
 
     if (officeId != null && officeId.isNotEmpty &&
