@@ -1,5 +1,8 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../services/spare_parts_repository.dart';
 import '../services/office_repository.dart';
@@ -288,6 +291,72 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
 
 
+
+  Future<void> _exportMovementReport({
+    required List<Map<String, dynamic>> events,
+    required Map<String, String> officeNames,
+    required String? selectedOffice,
+    required String? selectedSupplier,
+    required DateTime start,
+    required DateTime endExclusive,
+  }) async {
+    final filtered = events.where((event) {
+      if (selectedOffice != null && event['officeId'] != selectedOffice) {
+        return false;
+      }
+      if (event['isIncoming'] == true && selectedSupplier != null &&
+          event['supplier'] != selectedSupplier) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final workbook = Excel.createExcel();
+    final sheet = workbook['حركة المخزون'];
+    sheet.appendRow([
+      TextCellValue('التاريخ'),
+      TextCellValue('المكتب'),
+      TextCellValue('نوع الحركة'),
+      TextCellValue('القطعة'),
+      TextCellValue('معرّف القطعة'),
+      TextCellValue('الكمية'),
+      TextCellValue('تكلفة الوحدة'),
+      TextCellValue('إجمالي التكلفة'),
+      TextCellValue('المورد'),
+      TextCellValue('طلب الصيانة'),
+      TextCellValue('المنفذ'),
+      TextCellValue('معرّف الحركة'),
+    ]);
+    for (final event in filtered) {
+      final date = event['eventAt'] as DateTime;
+      sheet.appendRow([
+        TextCellValue(date.toIso8601String()),
+        TextCellValue(officeNames[event['officeId']] ?? event['officeId']?.toString() ?? ''),
+        TextCellValue(event['kind']?.toString() ?? ''),
+        TextCellValue(event['partName']?.toString() ?? ''),
+        TextCellValue(event['partId']?.toString() ?? ''),
+        IntCellValue((event['quantity'] as num?)?.toInt() ?? 0),
+        DoubleCellValue((event['unitCost'] as num?)?.toDouble() ?? 0),
+        DoubleCellValue((event['totalCost'] as num?)?.toDouble() ?? 0),
+        TextCellValue(event['supplier']?.toString() ?? ''),
+        TextCellValue(event['maintenanceId']?.toString() ?? ''),
+        TextCellValue(event['createdBy']?.toString() ?? ''),
+        TextCellValue(event['eventId']?.toString() ?? ''),
+      ]);
+    }
+    final bytes = workbook.encode();
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('تعذر إنشاء ملف Excel');
+    }
+    final fileName = 'spare_parts_movements_${start.toIso8601String().substring(0, 10)}_${endExclusive.subtract(const Duration(days: 1)).toIso8601String().substring(0, 10)}.xlsx';
+    await Share.shareXFiles(
+      [XFile.fromData(Uint8List.fromList(bytes),
+          name: fileName,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+      text: 'تقرير حركة مخزون قطع الغيار — للقراءة فقط',
+    );
+  }
+
   Future<void> _showMovementReport() async {
     final now = DateTime.now();
     final pickedRange = await showDateRangePicker(
@@ -430,7 +499,32 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await _exportMovementReport(
+                        events: events,
+                        officeNames: officeNames,
+                        selectedOffice: selectedOffice,
+                        selectedSupplier: selectedSupplier,
+                        start: DateTime(pickedRange.start.year,
+                            pickedRange.start.month, pickedRange.start.day),
+                        endExclusive: DateTime(pickedRange.end.year,
+                            pickedRange.end.month, pickedRange.end.day)
+                            .add(const Duration(days: 1)),
+                      );
+                    } catch (error) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('تعذر تصدير Excel: $error')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('تصدير Excel'),
+                ),
+                TextButton(onPressed: () => Navigator.pop(ctx),
+                    child: const Text('إغلاق')),
               ],
             );
           },
