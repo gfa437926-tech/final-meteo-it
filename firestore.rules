@@ -458,8 +458,7 @@ service cloud.firestore {
         exists(assetPath) &&
         get(assetPath).data.officeId == usage.officeId &&
         get(assetPath).data.status == 'maintenance' &&
-        hasOfficeAccess(usage.officeId) &&
-        validAllocationBatch(usageId, usage);
+        hasOfficeAccess(usage.officeId);
     }
 
     function validSparePartRestock(partId) {
@@ -599,7 +598,8 @@ service cloud.firestore {
         usage.officeId == resource.data.officeId &&
         usage.allocationId == usageId &&
         getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.lastPartsUsageId == usageId &&
-        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.officeId == resource.data.officeId;
+        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.officeId == resource.data.officeId &&
+        validAllocationBatch(usageId, usage);
     }
 
     function validMaintenancePartsCostUpdate(recordId) {
