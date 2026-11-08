@@ -119,6 +119,77 @@ class SparePartsRepository {
     });
   }
 
+
+  /// Atomically increases stock and appends an immutable receipt audit record.
+  /// The part's unitCost is recalculated as a weighted average.
+  Future<void> restock({
+    required String partId,
+    required int quantity,
+    required double unitCost,
+    required String supplier,
+    required String notes,
+    required DateTime receivedAt,
+  }) async {
+    final cleanSupplier = supplier.trim();
+    if (quantity <= 0 || !unitCost.isFinite || unitCost < 0 ||
+        cleanSupplier.isEmpty) {
+      throw ArgumentError('أدخل كمية موجبة وتكلفة صحيحة واسم المورد');
+    }
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
+    final partRef = parts.doc(partId);
+    final receiptRef = db.collection('spare_part_receipts').doc();
+    await db.runTransaction((transaction) async {
+      final partSnapshot = await transaction.get(partRef);
+      if (!partSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
+      final part = partSnapshot.data()!;
+      final officeId = part['officeId'] as String? ?? '';
+      if (officeId.isEmpty) {
+        throw StateError('لا يمكن إعادة توريد سجل مخزون تاريخي بلا مكتب');
+      }
+      final officeRef = db.collection('offices').doc(officeId);
+      final officeSnapshot = await transaction.get(officeRef);
+      if (!officeSnapshot.exists || officeSnapshot.data()?['isActive'] != true) {
+        throw StateError('المكتب غير موجود أو غير نشط');
+      }
+      final currentQuantity = part['quantity'] as int? ?? -1;
+      final currentUnitCost = (part['unitCost'] as num?)?.toDouble() ?? double.nan;
+      if (currentQuantity < 0 || !currentUnitCost.isFinite ||
+          currentUnitCost < 0) {
+        throw StateError('بيانات رصيد أو تكلفة المخزون غير صالحة');
+      }
+      final newQuantity = currentQuantity + quantity;
+      if (newQuantity < currentQuantity) {
+        throw StateError('تجاوز الحد المسموح لكمية المخزون');
+      }
+      final totalCost = quantity * unitCost;
+      final averageCost =
+          ((currentQuantity * currentUnitCost) + totalCost) / newQuantity;
+      final now = FieldValue.serverTimestamp();
+      transaction.update(partRef, {
+        'quantity': newQuantity,
+        'unitCost': averageCost,
+        'supplier': cleanSupplier,
+        'lastRestockId': receiptRef.id,
+        'updatedAt': now,
+      });
+      transaction.set(receiptRef, {
+        'partId': partId,
+        'officeId': officeId,
+        'quantity': quantity,
+        'quantityBefore': currentQuantity,
+        'quantityAfter': newQuantity,
+        'unitCost': unitCost,
+        'totalCost': totalCost,
+        'supplier': cleanSupplier,
+        'notes': notes.trim(),
+        'receivedAt': Timestamp.fromDate(receivedAt),
+        'createdAt': now,
+        'createdBy': uid,
+      });
+    });
+  }
+
   Future<void> consume({
     required String partId,
     required String maintenanceId,
