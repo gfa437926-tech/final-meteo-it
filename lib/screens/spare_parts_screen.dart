@@ -293,7 +293,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
 
   String _movementSupplierSummary(Map<String, dynamic> event) {
-    if (event['isIncoming'] == true) {
+    if (event['isIncoming'] == true || event['allocationLine'] == true) {
       return event['supplier']?.toString() ?? '';
     }
     final lines = event['allocationLines'];
