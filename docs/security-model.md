@@ -137,3 +137,8 @@ Until all six values are configured, the deployed site intentionally shows a Fir
 - كل قراءة وكتابة للمجموعات الجديدة محكومة بـ `officeId`: المدير العام شامل، ومدير المكتب يقتصر على المكاتب النشطة المسندة إليه. معرف المنفذ يستمد من جلسة Firebase Auth.
 - تقتصر حركة الصرف الواحدة على سطرين تخصيص بسبب حدود تقييم قواعد Firestore؛ يجب تقسيم الحركة التي تتطلب مصادر أكثر إلى حركات أصغر. لا يؤثر هذا الحد على كمية الرصيد الإجمالية ولا يسمح بتجاوز المتاح.
 - فهرس FIFO أضيف إلى `firestore.indexes.json` ولم يُنشر. نشر القواعد أو الفهارس إلى Firebase production ليس جزءاً من CI ولا يتم دون موافقة مستقلة.
+
+
+### FIFO enforcement boundary
+
+The Flutter repository selects lots in FIFO order by `receivedAt` then `createdAt`. Firestore rules validate the new usage/allocation bundle, office and actor links, exact lot-cost metadata, matching balance decrements, immutable records, and replay prevention. Firestore Security Rules cannot query all open lot balances to prove that a client-selected lot is globally the oldest available lot. Therefore, the current client workflow provides FIFO selection for the supported application but is not a tamper-proof FIFO authority against a modified client. Before treating supplier FIFO ordering as a production security guarantee, route consumption through a trusted server-side transaction (for example, an authenticated callable function or the approved backend) and deny direct client writes to the stock/allocation transaction collections. No such server-side service is deployed by this branch.
