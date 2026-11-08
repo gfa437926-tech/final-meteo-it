@@ -993,3 +993,92 @@ test('office-scoped inventory and open maintenance queries used by the UI are au
     ['open'],
   );
 });
+
+
+test('spare stock restocking requires an immutable office-scoped receipt in the same transaction', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  const admin = env.authenticatedContext('admin-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'spare_parts', 'restock-part-a'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-R',
+      quantity: 10, minimumQuantity: 2, unitCost: 20,
+      supplier: 'Old Supplier', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+
+  // Stock cannot be increased without an immutable receipt.
+  await assertFails(updateDoc(doc(managerA, 'spare_parts', 'restock-part-a'), {
+    quantity: 15, updatedAt: new Date(),
+  }));
+  // A receipt cannot be forged or written without the matching stock update.
+  const orphanReceipt = {
+    partId: 'restock-part-a', officeId: 'office-a',
+    quantity: 5, quantityBefore: 10, quantityAfter: 15,
+    unitCost: 12, totalCost: 60, supplier: 'New Supplier', notes: '',
+    receivedAt: new Date(), createdAt: new Date(), createdBy: 'manager-1',
+  };
+  await assertFails(setDoc(doc(managerA, 'spare_part_receipts', 'orphan'), orphanReceipt));
+  await assertFails(setDoc(doc(managerB, 'spare_part_receipts', 'forged-office'), {
+    ...orphanReceipt, officeId: 'office-a',
+  }));
+
+  await assertSucceeds(runTransaction(managerA, async (tx) => {
+    const partRef = doc(managerA, 'spare_parts', 'restock-part-a');
+    const receiptRef = doc(managerA, 'spare_part_receipts', 'restock-valid');
+    const part = await tx.get(partRef);
+    const oldQuantity = part.data().quantity;
+    const oldCost = part.data().unitCost;
+    const receivedQuantity = 5;
+    const purchaseUnitCost = 12;
+    const totalCost = receivedQuantity * purchaseUnitCost;
+    const newQuantity = oldQuantity + receivedQuantity;
+    const weightedAverage = ((oldQuantity * oldCost) + totalCost) / newQuantity;
+    tx.update(partRef, {
+      quantity: newQuantity,
+      unitCost: weightedAverage,
+      supplier: 'New Supplier',
+      lastRestockId: 'restock-valid',
+      updatedAt: new Date(),
+    });
+    tx.set(receiptRef, {
+      partId: 'restock-part-a', officeId: 'office-a',
+      quantity: receivedQuantity, quantityBefore: oldQuantity,
+      quantityAfter: newQuantity, unitCost: purchaseUnitCost,
+      totalCost, supplier: 'New Supplier', notes: 'Invoice INV-5',
+      receivedAt: new Date(), createdAt: new Date(), createdBy: 'manager-1',
+    });
+  }));
+
+  const partAfter = await getDoc(doc(managerA, 'spare_parts', 'restock-part-a'));
+  const receiptAfter = await getDoc(doc(managerA, 'spare_part_receipts', 'restock-valid'));
+  assert.equal(partAfter.data().quantity, 15);
+  assert.equal(partAfter.data().unitCost, 17.333333333333332);
+  assert.equal(partAfter.data().supplier, 'New Supplier');
+  assert.equal(receiptAfter.data().createdBy, 'manager-1');
+  assert.equal(receiptAfter.data().totalCost, 60);
+
+  await assertFails(updateDoc(doc(managerA, 'spare_part_receipts', 'restock-valid'), {
+    supplier: 'Tampered Supplier',
+  }));
+  await assertFails(deleteDoc(doc(managerA, 'spare_part_receipts', 'restock-valid')));
+  await assertFails(getDoc(doc(managerB, 'spare_part_receipts', 'restock-valid')));
+  await assertSucceeds(getDoc(doc(admin, 'spare_part_receipts', 'restock-valid')));
+});
+
+test('restocking cannot alter weighted cost or supplier independently of its receipt', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'spare_parts', 'restock-tamper'), {
+      officeId: 'office-a', name: 'RAM', sku: 'RAM-R',
+      quantity: 4, minimumQuantity: 1, unitCost: 8,
+      supplier: 'Original', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+  await assertFails(updateDoc(doc(manager, 'spare_parts', 'restock-tamper'), {
+    unitCost: 1, updatedAt: new Date(),
+  }));
+  await assertFails(updateDoc(doc(manager, 'spare_parts', 'restock-tamper'), {
+    supplier: 'Forged Supplier', updatedAt: new Date(),
+  }));
+});
