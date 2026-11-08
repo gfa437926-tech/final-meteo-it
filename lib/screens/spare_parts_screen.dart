@@ -344,6 +344,46 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         TextCellValue(event['eventId']?.toString() ?? ''),
       ]);
     }
+
+    void appendPeriodSummary(String sheetName, String Function(DateTime) keyOf) {
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final event in filtered) {
+        final key = keyOf(event['eventAt'] as DateTime);
+        grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(event);
+      }
+      final summary = workbook[sheetName];
+      summary.appendRow([
+        TextCellValue('الفترة'),
+        TextCellValue('كمية التوريد'),
+        TextCellValue('تكلفة التوريد'),
+        TextCellValue('كمية الصرف'),
+        TextCellValue('قيمة الصرف'),
+      ]);
+      final keys = grouped.keys.toList()..sort();
+      for (final key in keys) {
+        final rows = grouped[key]!;
+        final incoming = rows.where((row) => row['isIncoming'] == true).toList();
+        final outgoing = rows.where((row) => row['isIncoming'] != true).toList();
+        int quantityOf(List<Map<String, dynamic>> values) =>
+            values.fold<int>(0, (sum, row) =>
+                sum + ((row['quantity'] as num?)?.toInt() ?? 0));
+        double costOf(List<Map<String, dynamic>> values) =>
+            values.fold<double>(0, (sum, row) =>
+                sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+        summary.appendRow([
+          TextCellValue(key),
+          IntCellValue(quantityOf(incoming)),
+          DoubleCellValue(costOf(incoming)),
+          IntCellValue(quantityOf(outgoing)),
+          DoubleCellValue(costOf(outgoing)),
+        ]);
+      }
+    }
+
+    appendPeriodSummary('المقارنة الشهرية', (date) =>
+        '${date.year}-${date.month.toString().padLeft(2, '0')}');
+    appendPeriodSummary('المقارنة السنوية', (date) => date.year.toString());
+
     final bytes = workbook.encode();
     if (bytes == null || bytes.isEmpty) {
       throw StateError('تعذر إنشاء ملف Excel');
@@ -405,6 +445,17 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                 rows.fold<double>(0, (total, row) => total + (row['totalCost'] as double));
             final officeIds = officeEvents.map((e) => e['officeId'] as String? ?? '')
                 .where((id) => id.isNotEmpty).toSet().toList()..sort();
+            final periodGroups = <String, List<Map<String, dynamic>>>{};
+            for (final event in officeEvents) {
+              final date = event['eventAt'] as DateTime;
+              final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+              periodGroups.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(event);
+            }
+            final annualGroups = <String, List<Map<String, dynamic>>>{};
+            for (final event in officeEvents) {
+              final date = event['eventAt'] as DateTime;
+              annualGroups.putIfAbsent(date.year.toString(), () => <Map<String, dynamic>>[]).add(event);
+            }
             final supplierTotals = <String, List<Map<String, dynamic>>>{};
             for (final event in officeEvents.where((e) => e['isIncoming'] == true)) {
               final name = event['supplier'] as String? ?? 'غير محدد';
@@ -473,6 +524,47 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             ),
                           );
                         }),
+                      const Divider(height: 24),
+                      const Divider(height: 24),
+                      const Text('المقارنة الشهرية', style: TextStyle(fontWeight: FontWeight.bold)),
+                      if (periodGroups.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('لا توجد بيانات شهرية ضمن الفترة.'),
+                        )
+                      else
+                        ...periodGroups.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
+                            .map((entry) {
+                              final rows = entry.value;
+                              final received = rows.where((e) => e['isIncoming'] == true).toList();
+                              final issued = rows.where((e) => e['isIncoming'] != true).toList();
+                              return ListTile(
+                                dense: true,
+                                title: Text(entry.key),
+                                subtitle: Text('توريد: ${quantityOf(received)} وحدة • ${costOf(received).toStringAsFixed(2)}'
+                                    ' | صرف: ${quantityOf(issued)} وحدة • ${costOf(issued).toStringAsFixed(2)}'),
+                              );
+                            }),
+                      const Divider(height: 24),
+                      const Text('المقارنة السنوية', style: TextStyle(fontWeight: FontWeight.bold)),
+                      if (annualGroups.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('لا توجد بيانات سنوية ضمن الفترة.'),
+                        )
+                      else
+                        ...annualGroups.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
+                            .map((entry) {
+                              final rows = entry.value;
+                              final received = rows.where((e) => e['isIncoming'] == true).toList();
+                              final issued = rows.where((e) => e['isIncoming'] != true).toList();
+                              return ListTile(
+                                dense: true,
+                                title: Text(entry.key),
+                                subtitle: Text('توريد: ${quantityOf(received)} وحدة • ${costOf(received).toStringAsFixed(2)}'
+                                    ' | صرف: ${quantityOf(issued)} وحدة • ${costOf(issued).toStringAsFixed(2)}'),
+                              );
+                            }),
                       const Divider(height: 24),
                       const Text('تفصيل التوريد حسب المورد', style: TextStyle(fontWeight: FontWeight.bold)),
                       if (supplierTotals.isEmpty)
