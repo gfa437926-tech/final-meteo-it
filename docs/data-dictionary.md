@@ -71,7 +71,7 @@ Movement records are visible only to the global administrator or managers assign
 
 ## maintenance_parts/{usageId}
 
-Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`.
+Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `officeId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`, `createdBy`. The office must match the part, maintenance ticket, and linked asset; `createdBy` is the authenticated Firebase UID. The event is immutable.
 
 
 ## asset_documents
