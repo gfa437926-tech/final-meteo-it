@@ -319,13 +319,9 @@ service cloud.firestore {
       allow create: if isAdmin() &&
         request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
         linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
-      allow update: if isAdmin() &&
-        resource.data.keys().hasAll(['assetId', 'officeId']) &&
-        linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
-        request.resource.data.assetId == resource.data.assetId &&
-        request.resource.data.officeId == resource.data.officeId &&
-        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
-      allow delete: if false;
+      // Purchase records are append-only from client workflows. Corrections
+      // must use a separately reviewed administrative process, not client edits.
+      allow update, delete: if false;
     }
 
     match /maintenance_parts/{usageId} {
