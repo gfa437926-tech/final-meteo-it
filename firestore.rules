@@ -336,8 +336,9 @@ service cloud.firestore {
       let ticketPath = /databases/$(database)/documents/maintenance_records/$(usage.maintenanceId);
       let assetPath = /databases/$(database)/documents/assets/$(usage.assetId);
       return usageId is string && usageId.size() > 0 &&
-        usage.partId is string && usage.maintenanceId is string &&
-        usage.assetId is string && usage.officeId is string &&
+        usage.partId is string && usage.partName is string &&
+        usage.maintenanceId is string && usage.assetId is string &&
+        usage.officeId is string &&
         usage.quantity is int && usage.quantity > 0 &&
         usage.unitCost is number && usage.unitCost >= 0 &&
         usage.totalCost is number && usage.totalCost == usage.unitCost * usage.quantity &&
@@ -349,6 +350,7 @@ service cloud.firestore {
         getAfter(partPath).data.officeId == usage.officeId &&
         getAfter(ticketPath).data.officeId == usage.officeId &&
         get(assetPath).data.officeId == usage.officeId &&
+        get(assetPath).data.status == 'maintenance' &&
         getAfter(ticketPath).data.assetId == usage.assetId &&
         getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
         canAccessAssetId(usage.assetId) &&
