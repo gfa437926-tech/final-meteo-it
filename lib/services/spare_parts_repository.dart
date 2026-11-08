@@ -515,6 +515,9 @@ class SparePartsRepository {
           throw StateError('تتطلب هذه الحركة أكثر من مصدرين؛ قسّم الصرف إلى حركات أصغر');
         }
         final lineTotal = take * lotUnitCost;
+        if (!lineTotal.isFinite) {
+          throw StateError('إجمالي تكلفة دفعة التوريد يتجاوز النطاق الرقمي المسموح');
+        }
         lines.add({
           'sourceType': 'lot',
           'lotId': lotSnapshot.id,
@@ -535,6 +538,9 @@ class SparePartsRepository {
       }
       final totalCost = lines.fold<double>(0, (runningTotal, line) =>
           runningTotal + ((line['totalCost'] as num?)?.toDouble() ?? 0));
+      if (!totalCost.isFinite) {
+        throw StateError('إجمالي تكلفة الصرف يتجاوز النطاق الرقمي المسموح');
+      }
       // A blended unit price would falsely assign the known lot cost to legacy units.
       // Keep unitCost null unless every issued unit has a traceable lot cost.
       final double? averageUnitCost = legacyQuantity == 0
@@ -543,7 +549,8 @@ class SparePartsRepository {
       final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
       final newPartsCost = previousPartsCost + totalCost;
       if (!previousPartsCost.isFinite || previousPartsCost < 0 ||
-          !newPartsCost.isFinite || !averageUnitCost.isFinite) {
+          !newPartsCost.isFinite ||
+          (averageUnitCost != null && !averageUnitCost.isFinite)) {
         throw StateError('قيمة تكلفة القطع خارج النطاق الرقمي المسموح');
       }
       final now = FieldValue.serverTimestamp();
