@@ -997,7 +997,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(
                       'الرمز: ${data['sku'] ?? '—'} • المورد: ${data['supplier'] ?? '—'}\n'
-                      'الرصيد: $stock • حد التنبيه: $minimum • تكلفة الوحدة: ${data['unitCost'] ?? 0}',
+                      'الرصيد: $stock • حد التنبيه: $minimum • تكلفة آخر توريد: ${data['unitCost'] ?? 0}',
                     ),
                     isThreeLine: true,
                     trailing: Wrap(
