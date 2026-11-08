@@ -140,7 +140,7 @@ class AssetRepository {
             final bDate = bTime is Timestamp ? bTime.toDate() : DateTime(2000);
             return bDate.compareTo(aDate);
           });
-        return documents.take(5).toList();
+        return documents.take(limit).toList();
       });
     });
   }
