@@ -514,7 +514,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             .add(const Duration(days: 1)),
                       );
                     } catch (error) {
-                      if (ctx.mounted) {
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('تعذر تصدير Excel: $error')),
                         );
