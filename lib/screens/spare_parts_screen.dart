@@ -331,9 +331,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
               (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
             final outgoing = officeEvents.where((e) => e['isIncoming'] == false).toList();
             int quantityOf(List<Map<String, dynamic>> rows) =>
-                rows.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
+                rows.fold<int>(0, (total, row) => total + (row['quantity'] as int));
             double costOf(List<Map<String, dynamic>> rows) =>
-                rows.fold<double>(0, (sum, row) => sum + (row['totalCost'] as double));
+                rows.fold<double>(0, (total, row) => total + (row['totalCost'] as double));
             final officeIds = officeEvents.map((e) => e['officeId'] as String? ?? '')
                 .where((id) => id.isNotEmpty).toSet().toList()..sort();
             final supplierTotals = <String, List<Map<String, dynamic>>>{};
@@ -353,7 +353,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       Text('الفترة: ${pickedRange.start.toLocal().toString().split(' ').first} — ${pickedRange.end.toLocal().toString().split(' ').first}'),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: selectedOffice,
+                        initialValue: selectedOffice,
                         decoration: const InputDecoration(labelText: 'المكتب'),
                         items: [
                           const DropdownMenuItem<String>(value: null, child: Text('جميع المكاتب المصرح بها')),
@@ -365,7 +365,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: selectedSupplier,
+                        initialValue: selectedSupplier,
                         decoration: const InputDecoration(labelText: 'المورد (يطبق على الوارد فقط)'),
                         items: [
                           const DropdownMenuItem<String>(value: null, child: Text('جميع الموردين')),
