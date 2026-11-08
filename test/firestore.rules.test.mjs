@@ -726,6 +726,32 @@ test('asset document purchase links must match the same asset and office', async
   }));
 });
 
+test('purchase attachment queries require asset and office constraints', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'purchase_records', 'purchase-query-a'), {
+      assetId: 'asset-1', officeId: 'office-a', supplier: 'Supplier A',
+      purchaseDate: new Date(), totalCost: 50,
+    });
+    await setDoc(doc(db, 'asset_documents', 'purchase-query-doc'), {
+      assetId: 'asset-1', officeId: 'office-a',
+      purchaseRecordId: 'purchase-query-a',
+      fileName: 'invoice.pdf', storagePath: 'asset_documents/asset-1/invoice.pdf',
+    });
+  });
+  await assertSucceeds(getDocs(query(
+    collection(manager, 'asset_documents'),
+    where('purchaseRecordId', '==', 'purchase-query-a'),
+    where('assetId', '==', 'asset-1'),
+    where('officeId', '==', 'office-a'),
+  )));
+  await assertFails(getDocs(query(
+    collection(manager, 'asset_documents'),
+    where('purchaseRecordId', '==', 'purchase-query-a'),
+  )));
+});
+
 test('purchase records are immutable after creation', async () => {
   const manager = env.authenticatedContext('manager-1').firestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
