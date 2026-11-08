@@ -350,9 +350,6 @@ service cloud.firestore {
       return line is map && validAllocationLineMap(line, usageId, usage);
     }
     function validAllocationLineMap(line, usageId, usage) {
-      let lotPath = /databases/$(database)/documents/spare_part_lots/$(line.lotId);
-      let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(line.lotId);
-      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(line.receiptId);
       return line.keys().hasOnly([
            'sourceType', 'lotId', 'receiptId', 'supplier',
            'quantity', 'unitCost', 'totalCost'
@@ -367,28 +364,34 @@ service cloud.firestore {
            line.supplier == null && line.unitCost == null &&
            line.totalCost == null) ||
           (line.sourceType == 'lot' &&
-           line.lotId is string && line.receiptId is string &&
-           line.supplier is string && line.unitCost is number &&
-           line.unitCost >= 0 && line.totalCost is number &&
-           line.totalCost == line.quantity * line.unitCost &&
-           exists(lotPath) && exists(balancePath) && exists(receiptPath) &&
-           get(lotPath).data.partId == usage.partId &&
-           get(lotPath).data.officeId == usage.officeId &&
-           get(lotPath).data.receiptId == line.receiptId &&
-           get(lotPath).data.supplier == line.supplier &&
-           get(lotPath).data.unitCost == line.unitCost &&
-           get(receiptPath).data.partId == usage.partId &&
-           get(receiptPath).data.officeId == usage.officeId &&
-           get(receiptPath).data.lotId == line.lotId &&
-           get(balancePath).data.remainingQuantity >= line.quantity &&
-           getAfter(balancePath).data.remainingQuantity ==
-             get(balancePath).data.remainingQuantity - line.quantity &&
-           getAfter(balancePath).data.lastAllocationId == usageId &&
-           getAfter(balancePath).data.diff(get(balancePath).data)
-             .affectedKeys().hasOnly([
-               'remainingQuantity', 'updatedAt', 'lastAllocationId'
-             ]) &&
-           getAfter(balancePath).data.updatedAt is timestamp));
+           validLotAllocationLine(line, usageId, usage)));
+    }
+    function validLotAllocationLine(line, usageId, usage) {
+      let lotPath = /databases/$(database)/documents/spare_part_lots/$(line.lotId);
+      let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(line.lotId);
+      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(line.receiptId);
+      return line.lotId is string && line.receiptId is string &&
+        line.supplier is string && line.unitCost is number &&
+        line.unitCost >= 0 && line.totalCost is number &&
+        line.totalCost == line.quantity * line.unitCost &&
+        exists(lotPath) && exists(balancePath) && exists(receiptPath) &&
+        get(lotPath).data.partId == usage.partId &&
+        get(lotPath).data.officeId == usage.officeId &&
+        get(lotPath).data.receiptId == line.receiptId &&
+        get(lotPath).data.supplier == line.supplier &&
+        get(lotPath).data.unitCost == line.unitCost &&
+        get(receiptPath).data.partId == usage.partId &&
+        get(receiptPath).data.officeId == usage.officeId &&
+        get(receiptPath).data.lotId == line.lotId &&
+        get(balancePath).data.remainingQuantity >= line.quantity &&
+        getAfter(balancePath).data.remainingQuantity ==
+          get(balancePath).data.remainingQuantity - line.quantity &&
+        getAfter(balancePath).data.lastAllocationId == usageId &&
+        getAfter(balancePath).data.diff(get(balancePath).data)
+          .affectedKeys().hasOnly([
+            'remainingQuantity', 'updatedAt', 'lastAllocationId'
+          ]) &&
+        getAfter(balancePath).data.updatedAt is timestamp;
     }
     function validAllocationLines(lines, usageId, usage) {
       return lines is list && lines.size() >= 1 && lines.size() <= 5 &&
