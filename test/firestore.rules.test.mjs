@@ -1028,15 +1028,13 @@ test('spare stock restocking requires an immutable office-scoped receipt in the 
     const receiptRef = doc(managerA, 'spare_part_receipts', 'restock-valid');
     const part = await tx.get(partRef);
     const oldQuantity = part.data().quantity;
-    const oldCost = part.data().unitCost;
     const receivedQuantity = 5;
     const purchaseUnitCost = 12;
     const totalCost = receivedQuantity * purchaseUnitCost;
     const newQuantity = oldQuantity + receivedQuantity;
-    const weightedAverage = ((oldQuantity * oldCost) + totalCost) / newQuantity;
     tx.update(partRef, {
       quantity: newQuantity,
-      unitCost: weightedAverage,
+      unitCost: purchaseUnitCost,
       supplier: 'New Supplier',
       lastRestockId: 'restock-valid',
       updatedAt: new Date(),
@@ -1053,7 +1051,7 @@ test('spare stock restocking requires an immutable office-scoped receipt in the 
   const partAfter = await getDoc(doc(managerA, 'spare_parts', 'restock-part-a'));
   const receiptAfter = await getDoc(doc(managerA, 'spare_part_receipts', 'restock-valid'));
   assert.equal(partAfter.data().quantity, 15);
-  assert.equal(partAfter.data().unitCost, 17.333333333333332);
+  assert.equal(partAfter.data().unitCost, 12);
   assert.equal(partAfter.data().supplier, 'New Supplier');
   assert.equal(receiptAfter.data().createdBy, 'manager-1');
   assert.equal(receiptAfter.data().totalCost, 60);
