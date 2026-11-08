@@ -577,6 +577,26 @@ test('office-scoped asset queries must prove the manager office constraint', asy
   await assertFails(getDocs(collection(managerA, 'assets')));
 });
 
+test('movement records must match the linked asset before and after the transaction', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await assertSucceeds(setDoc(doc(manager, 'asset_movements', 'valid-movement'), {
+    assetId: 'asset-1', officeId: 'office-a',
+    movementType: 'maintenance_note', occurredAt: new Date(),
+  }));
+  await assertFails(setDoc(doc(manager, 'asset_movements', 'forged-asset-movement'), {
+    assetId: 'asset-b', officeId: 'office-a',
+    movementType: 'forged', occurredAt: new Date(),
+  }));
+  await assertFails(setDoc(doc(manager, 'asset_movements', 'forged-source'), {
+    assetId: 'asset-1', officeId: 'office-a', fromOfficeId: 'office-b',
+    movementType: 'forged', occurredAt: new Date(),
+  }));
+  await assertFails(setDoc(doc(manager, 'asset_movements', 'forged-destination'), {
+    assetId: 'asset-1', officeId: 'office-a', toOfficeId: 'office-b',
+    movementType: 'forged', occurredAt: new Date(),
+  }));
+});
+
 test('a transfer requires access to both the source and destination offices', async () => {
   const managerA = env.authenticatedContext('manager-1').firestore();
   await assertFails(updateDoc(doc(managerA, 'assets', 'asset-1'), {
