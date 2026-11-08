@@ -107,7 +107,7 @@ export function buildLegacyStockBackfillPlan({ parts, balances }) {
   return {
     mode: 'read_only_dry_run',
     writesPerformed: 0,
-    safeToApply: Object.keys(counts).every((status) =>
+    reconciliationPassed: Object.keys(counts).every((status) =>
       ['needs_untracked_initialization', 'already_consistent', 'legacy_admin_only'].includes(status),
     ) && orphanBalances.length === 0 && malformedBalances.length === 0,
     counts,
