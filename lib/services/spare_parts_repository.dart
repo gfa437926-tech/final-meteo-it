@@ -110,7 +110,9 @@ class SparePartsRepository {
       receiptsQuery = receiptsQuery.where('officeId', isEqualTo: officeId);
       issuesQuery = issuesQuery.where('officeId', isEqualTo: officeId);
     } else if (allowedOffices != null) {
-      if (allowedOffices.isEmpty) return <Map<String, dynamic>>[];
+      if (allowedOffices.isEmpty) {
+        return <Map<String, dynamic>>[];
+      }
       receiptsQuery = receiptsQuery.where('officeId', whereIn: allowedOffices);
       issuesQuery = issuesQuery.where('officeId', whereIn: allowedOffices);
     }
