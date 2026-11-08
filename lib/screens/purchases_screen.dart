@@ -43,7 +43,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                 const SizedBox(height: 8),
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance.collection('asset_documents')
-                      .where('purchaseRecordId', isEqualTo: record.id).snapshots(),
+                      .where('purchaseRecordId', isEqualTo: record.id)
+                      .where('assetId', isEqualTo: record.assetId)
+                      .where('officeId', isEqualTo: record.officeId)
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) return Text('تعذر تحميل المرفقات: ${snapshot.error}');
                     if (!snapshot.hasData) return const LinearProgressIndicator();
