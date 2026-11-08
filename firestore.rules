@@ -640,7 +640,7 @@ service cloud.firestore {
             request.resource.data.completedAt is timestamp &&
             getAfter(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.status ==
               resource.data.previousAssetStatus
-          ) || validMaintenancePartsCostUpdate(recordId)
+          )
         );
       allow delete: if false;
     }
@@ -659,19 +659,8 @@ service cloud.firestore {
     match /maintenance_parts/{usageId} {
       allow read: if isSuperAdmin() ||
         (resource.data.officeId is string && hasOfficeAccess(resource.data.officeId));
-      allow create: if validPartsUsageLink(usageId, request.resource.data) &&
-        request.resource.data.keys().hasOnly([
-          'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy',
-          'allocationId', 'allocationCount', 'legacyQuantity',
-          'costAttributionComplete'
-        ]) &&
-        request.resource.data.keys().hasAll([
-          'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy',
-          'allocationId', 'allocationCount', 'legacyQuantity',
-          'costAttributionComplete'
-        ]);
+      // Created only by the authenticated callable transaction (Admin SDK).
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -830,13 +819,11 @@ service cloud.firestore {
       allow read: if canReadAsset(resource.data);
       allow create: if canWriteAsset(request.resource.data) &&
         validSparePart(request.resource.data, request.resource.data.officeId);
-      // Stock changes only through a validated atomic usage or receipt.
-      allow update: if canWriteAsset(resource.data) && (
-        (request.resource.data.keys().hasAny(['lastUsageId']) &&
-          validSparePartConsumption(partId)) ||
-        (request.resource.data.keys().hasAny(['lastRestockId']) &&
-          validSparePartRestock(partId))
-      );
+      // Consumption is callable-server-only so a modified client cannot
+      // choose a non-FIFO lot. Client writes are limited to validated restocks.
+      allow update: if canWriteAsset(resource.data) &&
+        request.resource.data.keys().hasAny(['lastRestockId']) &&
+        validSparePartRestock(partId);
       allow delete: if false;
     }
 
@@ -853,13 +840,14 @@ service cloud.firestore {
     match /spare_part_lot_balances/{lotId} {
       allow read: if canReadAsset(resource.data);
       allow create: if validSparePartLotBalanceCreate(lotId, request.resource.data);
-      allow update: if validSparePartLotBalanceUpdate(lotId);
+      // Lot balances are mutated only by the trusted FIFO callable transaction.
+      allow update: if false;
       allow delete: if false;
     }
     match /spare_part_allocations/{allocationId} {
       allow read: if canReadAsset(resource.data);
-      allow create: if validSparePartAllocationCreate(allocationId, request.resource.data);
-      allow update, delete: if false;
+      // Allocation records are append-only and callable-server-only.
+      allow create, update, delete: if false;
     }
 
     // Only non-sensitive shared lookup catalogues remain on the generic
