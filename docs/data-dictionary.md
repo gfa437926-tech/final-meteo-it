@@ -90,3 +90,11 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 - `custody_cards`, `asset_documents` metadata, and `maintenance_parts` usage records are authorized through their `assetId` and the linked asset's `officeId`.
 - `asset_documents` metadata must carry the same `officeId` as its linked asset. Firebase Storage paths use `asset_documents/{assetId}/{fileName}`; Storage rules resolve the Firestore asset and its active office before allowing manager reads or uploads.
 - `maintenance_records` and `purchase_records` are office-scoped through their linked asset. Each record must carry an `officeId` matching the asset's current office; clients cannot forge this relationship, and deletes are denied.
+
+
+## مخزون قطع الغيار وصرفها
+
+- كل سجل في `spare_parts` جديد يجب أن يحمل `officeId` لمكتب نشط، وتُعزل قراءته بحسب المكاتب المسندة إلى مدير المكتب. السجلات القديمة التي لا تحمل `officeId` تبقى متاحة للمدير العام فقط ولا تدخل في الصرف.
+- كل سجل صرف في `maintenance_parts` يحمل `partId` و`maintenanceId` و`assetId` و`officeId` و`quantity` و`unitCost` و`totalCost` و`usedAt`. يجب أن تتطابق المكاتب الثلاثة: القطعة وطلب الصيانة والأصل.
+- عملية الصرف تنشئ سجل الاستخدام بمعرّف ثابت، وتحدّث رصيد القطعة (`quantity` و`lastUsageId`) وتكلفة القطع في طلب الصيانة (`partsCost` و`lastPartsUsageId`) ضمن معاملة Firestore واحدة. لا يقبل العميل أي تحديث منفرد للمخزون أو التكلفة، ولا تعديل/حذف سجل الاستخدام بعد إنشائه.
+- الكمية المصروفة عدد صحيح موجب، وتكلفة الاستخدام تساوي `quantity × unitCost`، ويجب أن يبقى طلب الصيانة مفتوحاً وأن يكون الأصل في حالة الصيانة.
