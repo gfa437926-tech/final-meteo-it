@@ -331,6 +331,114 @@ service cloud.firestore {
         get(/databases/$(database)/documents/assets/$(assetId)).data.officeId == officeId &&
         canAccessAssetId(assetId);
     }
+    function allocationLineQuantity(lines, index) {
+      return lines.size() > index ? lines[index].quantity : 0;
+    }
+    function allocationLineCost(lines, index) {
+      return lines.size() > index && lines[index].totalCost is number
+        ? lines[index].totalCost : 0;
+    }
+    function allocationLineLegacyQuantity(lines, index) {
+      return lines.size() > index && lines[index].sourceType == 'legacy_untracked'
+        ? lines[index].quantity : 0;
+    }
+    function validAllocationLine(lines, index, usageId, usage) {
+      let line = lines[index];
+      let lotPath = /databases/$(database)/documents/spare_part_lots/$(line.lotId);
+      let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(line.lotId);
+      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(line.receiptId);
+      return lines.size() <= index ||
+        (line is map &&
+         line.keys().hasOnly([
+           'sourceType', 'lotId', 'receiptId', 'supplier',
+           'quantity', 'unitCost', 'totalCost'
+         ]) &&
+         line.keys().hasAll([
+           'sourceType', 'lotId', 'receiptId', 'supplier',
+           'quantity', 'unitCost', 'totalCost'
+         ]) &&
+         line.quantity is int && line.quantity > 0 &&
+         ((line.sourceType == 'legacy_untracked' &&
+           line.lotId == null && line.receiptId == null &&
+           line.supplier == null && line.unitCost == null &&
+           line.totalCost == null) ||
+          (line.sourceType == 'lot' &&
+           line.lotId is string && line.receiptId is string &&
+           line.supplier is string && line.unitCost is number &&
+           line.unitCost >= 0 && line.totalCost is number &&
+           line.totalCost == line.quantity * line.unitCost &&
+           exists(lotPath) && exists(balancePath) && exists(receiptPath) &&
+           get(lotPath).data.partId == usage.partId &&
+           get(lotPath).data.officeId == usage.officeId &&
+           get(lotPath).data.receiptId == line.receiptId &&
+           get(lotPath).data.supplier == line.supplier &&
+           get(lotPath).data.unitCost == line.unitCost &&
+           get(receiptPath).data.partId == usage.partId &&
+           get(receiptPath).data.officeId == usage.officeId &&
+           get(receiptPath).data.lotId == line.lotId &&
+           get(balancePath).data.remainingQuantity >= line.quantity &&
+           getAfter(balancePath).data.remainingQuantity ==
+             get(balancePath).data.remainingQuantity - line.quantity &&
+           getAfter(balancePath).data.lastAllocationId == usageId &&
+           getAfter(balancePath).data.diff(get(balancePath).data)
+             .affectedKeys().hasOnly([
+               'remainingQuantity', 'updatedAt', 'lastAllocationId'
+             ]) &&
+           getAfter(balancePath).data.updatedAt is timestamp));
+    }
+    function validAllocationLines(lines, usageId, usage) {
+      return lines is list && lines.size() >= 1 && lines.size() <= 5 &&
+        allocationLineQuantity(lines, 0) +
+          allocationLineQuantity(lines, 1) +
+          allocationLineQuantity(lines, 2) +
+          allocationLineQuantity(lines, 3) +
+          allocationLineQuantity(lines, 4) == usage.quantity &&
+        allocationLineCost(lines, 0) +
+          allocationLineCost(lines, 1) +
+          allocationLineCost(lines, 2) +
+          allocationLineCost(lines, 3) +
+          allocationLineCost(lines, 4) == usage.totalCost &&
+        allocationLineLegacyQuantity(lines, 0) +
+          allocationLineLegacyQuantity(lines, 1) +
+          allocationLineLegacyQuantity(lines, 2) +
+          allocationLineLegacyQuantity(lines, 3) +
+          allocationLineLegacyQuantity(lines, 4) == usage.legacyQuantity &&
+        validAllocationLine(lines, 0, usageId, usage) &&
+        validAllocationLine(lines, 1, usageId, usage) &&
+        validAllocationLine(lines, 2, usageId, usage) &&
+        validAllocationLine(lines, 3, usageId, usage) &&
+        validAllocationLine(lines, 4, usageId, usage);
+    }
+    function validAllocationBatch(usageId, usage) {
+      let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
+      let allocation = getAfter(allocationPath).data;
+      return usage.allocationId == usageId &&
+        usage.allocationCount is int &&
+        usage.allocationCount >= 1 && usage.allocationCount <= 5 &&
+        usage.legacyQuantity is int &&
+        usage.legacyQuantity >= 0 && usage.legacyQuantity <= usage.quantity &&
+        usage.costAttributionComplete == (usage.legacyQuantity == 0) &&
+        existsAfter(allocationPath) &&
+        allocation.keys().hasOnly([
+          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
+          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
+        ]) &&
+        allocation.keys().hasAll([
+          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
+          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
+        ]) &&
+        allocation.usageId == usageId &&
+        allocation.partId == usage.partId &&
+        allocation.officeId == usage.officeId &&
+        allocation.maintenanceId == usage.maintenanceId &&
+        allocation.assetId == usage.assetId &&
+        allocation.quantity == usage.quantity &&
+        allocation.totalCost == usage.totalCost &&
+        allocation.lines.size() == usage.allocationCount &&
+        allocation.createdBy == request.auth.uid &&
+        allocation.createdAt is timestamp &&
+        validAllocationLines(allocation.lines, usageId, usage);
+    }
     function validPartsUsageLink(usageId, usage) {
       let partPath = /databases/$(database)/documents/spare_parts/$(usage.partId);
       let ticketPath = /databases/$(database)/documents/maintenance_records/$(usage.maintenanceId);
@@ -341,7 +449,7 @@ service cloud.firestore {
         usage.officeId is string &&
         usage.quantity is int && usage.quantity > 0 &&
         usage.unitCost is number && usage.unitCost >= 0 &&
-        usage.totalCost is number && usage.totalCost == usage.unitCost * usage.quantity &&
+        usage.totalCost is number && usage.totalCost >= 0 &&
         usage.notes is string && usage.usedAt is timestamp &&
         usage.createdBy == request.auth.uid &&
         existsAfter(partPath) && existsAfter(ticketPath) && exists(assetPath) &&
@@ -353,27 +461,35 @@ service cloud.firestore {
         getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
         getAfter(ticketPath).data.assetId == usage.assetId &&
         getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
-        hasOfficeAccess(usage.officeId);
+        hasOfficeAccess(usage.officeId) &&
+        validAllocationBatch(usageId, usage);
     }
 
     function validSparePartRestock(partId) {
       let restockId = request.resource.data.get('lastRestockId', null);
       let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(restockId);
+      let lotPath = /databases/$(database)/documents/spare_part_lots/$(restockId);
+      let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(restockId);
       let receipt = getAfter(receiptPath).data;
+      let lot = getAfter(lotPath).data;
+      let oldUntracked = resource.data.get('untrackedQuantity', resource.data.quantity);
       return restockId is string && existsAfter(receiptPath) &&
+        existsAfter(lotPath) && existsAfter(balancePath) &&
         request.resource.data.officeId == resource.data.officeId &&
         receipt.keys().hasAll([
-          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'partId', 'officeId', 'lotId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
         ]) &&
         receipt.partId == partId &&
         receipt.officeId == resource.data.officeId &&
+        receipt.lotId == restockId &&
         receipt.createdBy == request.auth.uid &&
         receipt.quantity is int && receipt.quantity > 0 &&
         receipt.quantityBefore == resource.data.quantity &&
         receipt.quantityAfter == request.resource.data.quantity &&
         request.resource.data.quantity == resource.data.quantity + receipt.quantity &&
+        request.resource.data.untrackedQuantity == oldUntracked &&
         receipt.unitCost is number && receipt.unitCost >= 0 &&
         receipt.totalCost == receipt.quantity * receipt.unitCost &&
         request.resource.data.unitCost == receipt.unitCost &&
@@ -381,27 +497,44 @@ service cloud.firestore {
         receipt.supplier is string && receipt.supplier.size() > 0 &&
         receipt.notes is string &&
         receipt.receivedAt is timestamp && receipt.createdAt is timestamp &&
+        lot.partId == partId && lot.officeId == resource.data.officeId &&
+        lot.receiptId == restockId && lot.supplier == receipt.supplier &&
+        lot.receivedQuantity == receipt.quantity &&
+        lot.unitCost == receipt.unitCost && lot.totalCost == receipt.totalCost &&
+        lot.receivedAt == receipt.receivedAt && lot.createdBy == request.auth.uid &&
+        getAfter(balancePath).data.lotId == restockId &&
+        getAfter(balancePath).data.partId == partId &&
+        getAfter(balancePath).data.officeId == resource.data.officeId &&
+        getAfter(balancePath).data.remainingQuantity == receipt.quantity &&
         request.resource.data.lastRestockId == restockId &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['quantity', 'unitCost', 'supplier', 'lastRestockId', 'updatedAt']) &&
+          .hasOnly([
+            'quantity', 'untrackedQuantity', 'unitCost', 'supplier',
+            'lastRestockId', 'updatedAt'
+          ]) &&
         request.resource.data.updatedAt is timestamp &&
         hasOfficeAccess(resource.data.officeId);
     }
 
     function validSparePartReceiptCreate(receiptId, data) {
       let partPath = /databases/$(database)/documents/spare_parts/$(data.partId);
+      let lotPath = /databases/$(database)/documents/spare_part_lots/$(receiptId);
+      let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(receiptId);
       let partAfter = getAfter(partPath).data;
+      let lotAfter = getAfter(lotPath).data;
+      let balanceAfter = getAfter(balancePath).data;
       return isActiveUser() && data.keys().hasOnly([
-          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'partId', 'officeId', 'lotId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
         ]) &&
         data.keys().hasAll([
-          'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
+          'partId', 'officeId', 'lotId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
         ]) &&
         data.partId is string && data.officeId is string &&
+        data.lotId == receiptId &&
         data.quantity is int && data.quantity > 0 &&
         data.quantityBefore is int && data.quantityBefore >= 0 &&
         data.quantityAfter is int &&
@@ -413,16 +546,25 @@ service cloud.firestore {
         data.receivedAt is timestamp && data.createdAt is timestamp &&
         data.createdBy == request.auth.uid &&
         hasOfficeAccess(data.officeId) &&
-        existsAfter(partPath) &&
+        existsAfter(partPath) && existsAfter(lotPath) && existsAfter(balancePath) &&
         partAfter.officeId == data.officeId &&
         partAfter.quantity == data.quantityAfter &&
-        partAfter.lastRestockId == receiptId;
+        partAfter.lastRestockId == receiptId &&
+        lotAfter.partId == data.partId && lotAfter.officeId == data.officeId &&
+        lotAfter.receiptId == receiptId &&
+        lotAfter.receivedQuantity == data.quantity &&
+        lotAfter.unitCost == data.unitCost && lotAfter.totalCost == data.totalCost &&
+        lotAfter.supplier == data.supplier &&
+        balanceAfter.lotId == receiptId && balanceAfter.partId == data.partId &&
+        balanceAfter.officeId == data.officeId &&
+        balanceAfter.remainingQuantity == data.quantity;
     }
 
     function validSparePart(data, officeId) {
       return data.keys().hasOnly([
-          'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
-          'unitCost', 'supplier', 'createdAt', 'updatedAt', 'lastRestockId'
+          'officeId', 'name', 'sku', 'quantity', 'untrackedQuantity',
+          'minimumQuantity', 'unitCost', 'supplier', 'createdAt',
+          'updatedAt', 'lastRestockId'
         ]) &&
         data.keys().hasAll([
           'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
@@ -432,6 +574,10 @@ service cloud.firestore {
         data.name is string && data.name.size() > 0 && data.name.size() <= 180 &&
         data.sku is string && data.sku.size() > 0 && data.sku.size() <= 80 &&
         data.quantity is int && data.quantity >= 0 &&
+        (!data.keys().hasAny(['untrackedQuantity']) ||
+          (data.untrackedQuantity is int &&
+           data.untrackedQuantity >= 0 &&
+           data.untrackedQuantity <= data.quantity)) &&
         data.minimumQuantity is int && data.minimumQuantity >= 0 &&
         data.unitCost is number && data.unitCost >= 0 &&
         data.supplier is string &&
@@ -441,17 +587,22 @@ service cloud.firestore {
     function validSparePartConsumption(partId) {
       let usageId = request.resource.data.get('lastUsageId', null);
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
+      let usage = getAfter(usagePath).data;
+      let oldUntracked = resource.data.get('untrackedQuantity', resource.data.quantity);
       return usageId is string && existsAfter(usagePath) &&
         request.resource.data.officeId == resource.data.officeId &&
-        request.resource.data.quantity == resource.data.quantity - getAfter(usagePath).data.quantity &&
+        request.resource.data.quantity == resource.data.quantity - usage.quantity &&
+        request.resource.data.untrackedQuantity ==
+          oldUntracked - usage.legacyQuantity &&
         request.resource.data.unitCost == resource.data.unitCost &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['quantity', 'lastUsageId', 'updatedAt']) &&
+          .hasOnly(['quantity', 'untrackedQuantity', 'lastUsageId', 'updatedAt']) &&
         request.resource.data.updatedAt is timestamp &&
-        getAfter(usagePath).data.partId == partId &&
-        getAfter(usagePath).data.officeId == resource.data.officeId &&
-        getAfter(/databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId)).data.lastPartsUsageId == usageId &&
-        getAfter(/databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId)).data.officeId == resource.data.officeId;
+        usage.partId == partId &&
+        usage.officeId == resource.data.officeId &&
+        usage.allocationId == usageId &&
+        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.lastPartsUsageId == usageId &&
+        getAfter(/databases/$(database)/documents/maintenance_records/$(usage.maintenanceId)).data.officeId == resource.data.officeId;
     }
 
     function validMaintenancePartsCostUpdate(recordId) {
@@ -527,11 +678,15 @@ service cloud.firestore {
       allow create: if validPartsUsageLink(usageId, request.resource.data) &&
         request.resource.data.keys().hasOnly([
           'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy'
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy',
+          'allocationId', 'allocationCount', 'legacyQuantity',
+          'costAttributionComplete'
         ]) &&
         request.resource.data.keys().hasAll([
           'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy'
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy',
+          'allocationId', 'allocationCount', 'legacyQuantity',
+          'costAttributionComplete'
         ]);
       allow update, delete: if false;
     }
@@ -577,6 +732,106 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    function validSparePartLotCreate(lotId, data) {
+      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(lotId);
+      let partPath = /databases/$(database)/documents/spare_parts/$(data.partId);
+      return isActiveUser() && data.keys().hasOnly([
+          'partId', 'officeId', 'receiptId', 'supplier', 'receivedQuantity',
+          'unitCost', 'totalCost', 'receivedAt', 'createdAt', 'createdBy'
+        ]) &&
+        data.keys().hasAll([
+          'partId', 'officeId', 'receiptId', 'supplier', 'receivedQuantity',
+          'unitCost', 'totalCost', 'receivedAt', 'createdAt', 'createdBy'
+        ]) &&
+        data.receiptId == lotId &&
+        data.partId is string && data.officeId is string &&
+        data.supplier is string && data.supplier.size() > 0 &&
+        data.receivedQuantity is int && data.receivedQuantity > 0 &&
+        data.unitCost is number && data.unitCost >= 0 &&
+        data.totalCost == data.receivedQuantity * data.unitCost &&
+        data.receivedAt is timestamp && data.createdAt is timestamp &&
+        data.createdBy == request.auth.uid &&
+        hasOfficeAccess(data.officeId) &&
+        existsAfter(receiptPath) && existsAfter(partPath) &&
+        getAfter(receiptPath).data.lotId == lotId &&
+        getAfter(receiptPath).data.partId == data.partId &&
+        getAfter(receiptPath).data.officeId == data.officeId &&
+        getAfter(partPath).data.officeId == data.officeId;
+    }
+    function validSparePartLotBalanceCreate(lotId, data) {
+      let lotPath = /databases/$(database)/documents/spare_part_lots/$(lotId);
+      return isActiveUser() && data.keys().hasOnly([
+          'lotId', 'partId', 'officeId', 'remainingQuantity',
+          'createdAt', 'updatedAt', 'lastAllocationId'
+        ]) &&
+        data.keys().hasAll([
+          'lotId', 'partId', 'officeId', 'remainingQuantity',
+          'createdAt', 'updatedAt', 'lastAllocationId'
+        ]) &&
+        data.lotId == lotId && data.partId is string &&
+        data.officeId is string &&
+        data.remainingQuantity is int && data.remainingQuantity > 0 &&
+        data.createdAt is timestamp && data.updatedAt is timestamp &&
+        data.lastAllocationId == null &&
+        existsAfter(lotPath) &&
+        getAfter(lotPath).data.partId == data.partId &&
+        getAfter(lotPath).data.officeId == data.officeId &&
+        getAfter(lotPath).data.receivedQuantity == data.remainingQuantity &&
+        hasOfficeAccess(data.officeId);
+    }
+    function validSparePartLotBalanceUpdate(lotId) {
+      let allocationId = request.resource.data.get('lastAllocationId', null);
+      let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(allocationId);
+      let allocation = getAfter(allocationPath).data;
+      return allocationId is string && existsAfter(allocationPath) &&
+        request.resource.data.lotId == resource.data.lotId &&
+        request.resource.data.partId == resource.data.partId &&
+        request.resource.data.officeId == resource.data.officeId &&
+        request.resource.data.remainingQuantity is int &&
+        request.resource.data.remainingQuantity >= 0 &&
+        request.resource.data.remainingQuantity < resource.data.remainingQuantity &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['remainingQuantity', 'updatedAt', 'lastAllocationId']) &&
+        allocation.usageId == allocationId &&
+        allocation.partId == resource.data.partId &&
+        allocation.officeId == resource.data.officeId &&
+        allocation.lines.hasAny([{
+          'sourceType': 'lot',
+          'lotId': lotId,
+          'receiptId': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.receiptId,
+          'supplier': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.supplier,
+          'quantity': resource.data.remainingQuantity - request.resource.data.remainingQuantity,
+          'unitCost': get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.unitCost,
+          'totalCost': (resource.data.remainingQuantity - request.resource.data.remainingQuantity) *
+            get(/databases/$(database)/documents/spare_part_lots/$(lotId)).data.unitCost
+        }]) &&
+        hasOfficeAccess(resource.data.officeId);
+    }
+    function validSparePartAllocationCreate(allocationId, data) {
+      let usagePath = /databases/$(database)/documents/maintenance_parts/$(allocationId);
+      return isActiveUser() && data.keys().hasOnly([
+          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
+          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
+        ]) &&
+        data.keys().hasAll([
+          'usageId', 'partId', 'officeId', 'maintenanceId', 'assetId',
+          'quantity', 'totalCost', 'lines', 'createdAt', 'createdBy'
+        ]) &&
+        data.usageId == allocationId &&
+        existsAfter(usagePath) &&
+        getAfter(usagePath).data.allocationId == allocationId &&
+        getAfter(usagePath).data.partId == data.partId &&
+        getAfter(usagePath).data.officeId == data.officeId &&
+        getAfter(usagePath).data.maintenanceId == data.maintenanceId &&
+        getAfter(usagePath).data.assetId == data.assetId &&
+        getAfter(usagePath).data.quantity == data.quantity &&
+        getAfter(usagePath).data.totalCost == data.totalCost &&
+        getAfter(usagePath).data.createdBy == data.createdBy &&
+        data.createdBy == request.auth.uid &&
+        hasOfficeAccess(data.officeId);
+    }
+
     match /spare_parts/{partId} {
       // Office stock is isolated; legacy stock without officeId remains
       // visible to the global administrator only and cannot be consumed.
@@ -596,6 +851,22 @@ service cloud.firestore {
     match /spare_part_receipts/{receiptId} {
       allow read: if canReadAsset(resource.data);
       allow create: if validSparePartReceiptCreate(receiptId, request.resource.data);
+      allow update, delete: if false;
+    }
+    match /spare_part_lots/{lotId} {
+      allow read: if canReadAsset(resource.data);
+      allow create: if validSparePartLotCreate(lotId, request.resource.data);
+      allow update, delete: if false;
+    }
+    match /spare_part_lot_balances/{lotId} {
+      allow read: if canReadAsset(resource.data);
+      allow create: if validSparePartLotBalanceCreate(lotId, request.resource.data);
+      allow update: if validSparePartLotBalanceUpdate(lotId);
+      allow delete: if false;
+    }
+    match /spare_part_allocations/{allocationId} {
+      allow read: if canReadAsset(resource.data);
+      allow create: if validSparePartAllocationCreate(allocationId, request.resource.data);
       allow update, delete: if false;
     }
 
