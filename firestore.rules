@@ -443,9 +443,15 @@ service cloud.firestore {
         usage.totalCost is number && usage.totalCost >= 0 &&
         usage.notes is string && usage.usedAt is timestamp &&
         usage.createdBy == request.auth.uid &&
-        exists(assetPath) &&
+        existsAfter(partPath) && existsAfter(ticketPath) && exists(assetPath) &&
         get(assetPath).data.officeId == usage.officeId &&
         get(assetPath).data.status == 'maintenance' &&
+        getAfter(partPath).data.officeId == usage.officeId &&
+        getAfter(partPath).data.get('lastUsageId', null) == usageId &&
+        getAfter(ticketPath).data.officeId == usage.officeId &&
+        getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
+        getAfter(ticketPath).data.assetId == usage.assetId &&
+        getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
         hasOfficeAccess(usage.officeId);
     }
 
