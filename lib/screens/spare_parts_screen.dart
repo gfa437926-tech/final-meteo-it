@@ -445,14 +445,17 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                 rows.fold<double>(0, (total, row) => total + (row['totalCost'] as double));
             final officeIds = officeEvents.map((e) => e['officeId'] as String? ?? '')
                 .where((id) => id.isNotEmpty).toSet().toList()..sort();
+            final periodEvents = officeEvents.where((event) =>
+              event['isIncoming'] != true || selectedSupplier == null ||
+              event['supplier'] == selectedSupplier).toList();
             final periodGroups = <String, List<Map<String, dynamic>>>{};
-            for (final event in officeEvents) {
+            for (final event in periodEvents) {
               final date = event['eventAt'] as DateTime;
               final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
               periodGroups.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(event);
             }
             final annualGroups = <String, List<Map<String, dynamic>>>{};
-            for (final event in officeEvents) {
+            for (final event in periodEvents) {
               final date = event['eventAt'] as DateTime;
               annualGroups.putIfAbsent(date.year.toString(), () => <Map<String, dynamic>>[]).add(event);
             }
@@ -528,7 +531,6 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             ),
                           );
                         }),
-                      const Divider(height: 24),
                       const Divider(height: 24),
                       const Text('المقارنة الشهرية', style: TextStyle(fontWeight: FontWeight.bold)),
                       if (periodGroups.isEmpty)
