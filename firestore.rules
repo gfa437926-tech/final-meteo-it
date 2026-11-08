@@ -343,6 +343,7 @@ service cloud.firestore {
         usage.unitCost is number && usage.unitCost >= 0 &&
         usage.totalCost is number && usage.totalCost == usage.unitCost * usage.quantity &&
         usage.notes is string && usage.usedAt is timestamp &&
+        usage.createdBy == request.auth.uid &&
         existsAfter(partPath) && existsAfter(ticketPath) && exists(assetPath) &&
         get(assetPath).data.officeId == usage.officeId &&
         get(assetPath).data.status == 'maintenance' &&
@@ -522,16 +523,15 @@ service cloud.firestore {
 
     match /maintenance_parts/{usageId} {
       allow read: if isSuperAdmin() ||
-        (resource.data.keys().hasAll(['assetId', 'officeId']) &&
-         linkedAssetOffice(resource.data.assetId, resource.data.officeId));
+        (resource.data.officeId is string && hasOfficeAccess(resource.data.officeId));
       allow create: if validPartsUsageLink(usageId, request.resource.data) &&
         request.resource.data.keys().hasOnly([
           'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt'
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy'
         ]) &&
         request.resource.data.keys().hasAll([
           'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
-          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt'
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt', 'createdBy'
         ]);
       allow update, delete: if false;
     }
