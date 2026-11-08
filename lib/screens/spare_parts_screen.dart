@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../services/spare_parts_repository.dart';
+import '../services/office_repository.dart';
 
 class SparePartsScreen extends StatefulWidget {
   const SparePartsScreen({super.key});
@@ -21,9 +22,21 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     final minimum = TextEditingController(text: '1');
     final cost = TextEditingController(text: '0');
     final supplier = TextEditingController();
+    final offices = await OfficeRepository().watchOffices().first;
+    if (!mounted) return;
+    if (offices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد مكاتب نشطة مخولة لإضافة المخزون')),
+      );
+      name.dispose(); sku.dispose(); quantity.dispose(); minimum.dispose();
+      cost.dispose(); supplier.dispose();
+      return;
+    }
+    String? selectedOfficeId = offices.length == 1 ? offices.first.id : null;
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
         title: const Text('إضافة قطعة غيار للمخزون'),
         content: SizedBox(
           width: 440,
@@ -45,7 +58,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           FilledButton(
             onPressed: () {
-              if (form.currentState!.validate()) Navigator.pop(ctx, true);
+              if (selectedOfficeId != null && form.currentState!.validate()) Navigator.pop(ctx, true);
             },
             child: const Text('حفظ القطعة'),
           ),
@@ -56,6 +69,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       try {
         await repository.addPart(
           id: const Uuid().v4(),
+          officeId: selectedOfficeId!,
           name: name.text,
           sku: sku.text,
           quantity: int.parse(quantity.text),
