@@ -36,5 +36,8 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Run provisioning input tests and Firestore/Storage emulator suite
-        run: npx firebase-tools emulators:exec --only firestore,storage --project demo-metra-it-assets "npm test"
+      - name: Install trusted function dependencies
+        run: cd functions && npm install --no-audit --no-fund
+
+      - name: Run provisioning, rules and trusted FIFO transaction tests
+        run: npx firebase-tools emulators:exec --only firestore,storage --project demo-metra-it-assets "npm test && cd functions && npm test"
