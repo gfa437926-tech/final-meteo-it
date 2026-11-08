@@ -295,11 +295,21 @@ service cloud.firestore {
         linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
         request.resource.data.status == 'open';
       allow update: if isAdmin() &&
-        resource.data.keys().hasAll(['assetId', 'officeId']) &&
+        resource.data.keys().hasAll(['assetId', 'officeId', 'previousAssetStatus']) &&
         linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
         request.resource.data.assetId == resource.data.assetId &&
         request.resource.data.officeId == resource.data.officeId &&
-        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId);
+        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
+        request.resource.data.status == 'completed' &&
+        request.resource.data.resolution is string &&
+        request.resource.data.resolution.size() > 0 &&
+        request.resource.data.cost is number &&
+        request.resource.data.cost >= 0 &&
+        request.resource.data.completedAt is timestamp &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'resolution', 'cost', 'completedAt']) &&
+        getAfter(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.status ==
+          resource.data.previousAssetStatus;
       allow delete: if false;
     }
     match /purchase_records/{recordId} {
