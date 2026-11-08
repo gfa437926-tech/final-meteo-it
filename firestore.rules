@@ -347,9 +347,9 @@ service cloud.firestore {
         get(assetPath).data.officeId == usage.officeId &&
         get(assetPath).data.status == 'maintenance' &&
         getAfter(partPath).data.officeId == usage.officeId &&
-        getAfter(partPath).data.lastUsageId == usageId &&
+        getAfter(partPath).data.get('lastUsageId', null) == usageId &&
         getAfter(ticketPath).data.officeId == usage.officeId &&
-        getAfter(ticketPath).data.lastPartsUsageId == usageId &&
+        getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
         getAfter(ticketPath).data.assetId == usage.assetId &&
         getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
         hasOfficeAccess(usage.officeId);
@@ -394,21 +394,21 @@ service cloud.firestore {
     function validMaintenancePartsCostUpdate(recordId) {
       let usageId = request.resource.data.get('lastPartsUsageId', null);
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
-      let partPath = /databases/$(database)/documents/spare_parts/$(getAfter(usagePath).data.partId);
+      let usage = getAfter(usagePath).data;
+      let partPath = /databases/$(database)/documents/spare_parts/$(usage.partId);
       return usageId is string && existsAfter(usagePath) &&
         request.resource.data.assetId == resource.data.assetId &&
         request.resource.data.officeId == resource.data.officeId &&
         request.resource.data.status == resource.data.status &&
         resource.data.status in ['open', 'inProgress'] &&
-        request.resource.data.partsCost ==
-          resource.data.get('partsCost', 0) + getAfter(usagePath).data.totalCost &&
+        request.resource.data.partsCost == resource.data.get('partsCost', 0) + usage.totalCost &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['partsCost', 'lastPartsUsageId', 'updatedAt']) &&
         request.resource.data.updatedAt is timestamp &&
-        getAfter(usagePath).data.maintenanceId == recordId &&
-        getAfter(usagePath).data.assetId == resource.data.assetId &&
-        getAfter(usagePath).data.officeId == resource.data.officeId &&
-        getAfter(partPath).data.lastUsageId == usageId &&
+        usage.maintenanceId == recordId &&
+        usage.assetId == resource.data.assetId &&
+        usage.officeId == resource.data.officeId &&
+        getAfter(partPath).data.get('lastUsageId', null) == usageId &&
         getAfter(partPath).data.officeId == resource.data.officeId;
     }
 
@@ -420,31 +420,27 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
         linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
         request.resource.data.status == 'open';
-      allow update: if (
-        isAdmin() &&
-        resource.data.keys().hasAll(['assetId', 'officeId', 'previousAssetStatus']) &&
-        linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
-        request.resource.data.assetId == resource.data.assetId &&
-        request.resource.data.officeId == resource.data.officeId &&
-        linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
-        request.resource.data.status == 'completed' &&
-        request.resource.data.resolution is string &&
-        request.resource.data.resolution.size() > 0 &&
-        request.resource.data.cost is number &&
-        request.resource.data.cost >= 0 &&
-        request.resource.data.completedAt is timestamp &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'resolution', 'cost', 'completedAt']) &&
-        getAfter(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.status ==
-          resource.data.previousAssetStatus
-      ) || (
-        resource.data.officeId is string &&
+      allow update: if resource.data.officeId is string &&
         hasOfficeAccess(resource.data.officeId) &&
         exists(/databases/$(database)/documents/assets/$(resource.data.assetId)) &&
         get(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.officeId ==
-          resource.data.officeId &&
-        validMaintenancePartsCostUpdate(recordId)
-      );
+          resource.data.officeId && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'resolution', 'cost', 'completedAt']) &&
+            resource.data.keys().hasAll(['assetId', 'officeId', 'previousAssetStatus']) &&
+            request.resource.data.assetId == resource.data.assetId &&
+            request.resource.data.officeId == resource.data.officeId &&
+            request.resource.data.status == 'completed' &&
+            request.resource.data.resolution is string &&
+            request.resource.data.resolution.size() > 0 &&
+            request.resource.data.cost is number &&
+            request.resource.data.cost >= 0 &&
+            request.resource.data.completedAt is timestamp &&
+            getAfter(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.status ==
+              resource.data.previousAssetStatus
+          ) || validMaintenancePartsCostUpdate(recordId)
+        );
       allow delete: if false;
     }
     match /purchase_records/{recordId} {
