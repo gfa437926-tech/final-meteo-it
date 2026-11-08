@@ -535,7 +535,11 @@ class SparePartsRepository {
       }
       final totalCost = lines.fold<double>(0, (runningTotal, line) =>
           runningTotal + ((line['totalCost'] as num?)?.toDouble() ?? 0));
-      final averageUnitCost = totalCost / quantity;
+      // A blended unit price would falsely assign the known lot cost to legacy units.
+      // Keep unitCost null unless every issued unit has a traceable lot cost.
+      final double? averageUnitCost = legacyQuantity == 0
+          ? totalCost / quantity
+          : null;
       final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
       final newPartsCost = previousPartsCost + totalCost;
       if (!previousPartsCost.isFinite || previousPartsCost < 0 ||
