@@ -601,7 +601,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         _historyMetric('تكلفة التوريد', costOf(incoming).toStringAsFixed(2)),
                         _historyMetric('الكمية المصروفة', quantityOf(outgoing).toString()),
                         _historyMetric('قيمة الصرف', costOf(outgoing).toStringAsFixed(2)),
-                        _historyMetric('صرف غير مكتمل النسبة', events.where((e) =>
+                        _historyMetric('صرف غير مكتمل النسبة', filteredEvents.where((e) =>
                           e['isIncoming'] == false && e['costAttributionComplete'] != true).length.toString()),
                       ]),
                       const Divider(height: 24),
@@ -615,9 +615,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         ...officeIds.map((id) {
                           final rows = filteredEvents.where((e) => e['officeId'] == id).toList();
                           final receivedRows = rows.where((e) =>
-                            e['isIncoming'] == true &&
-                            (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
-                          final issuedRows = rows.where((e) => e['isIncoming'] == false).toList();
+                            e['isIncoming'] == true).toList();
+                          final issuedRows = rows.where((e) =>
+                            e['isIncoming'] == false).toList();
                           return Card(
                             child: ListTile(
                               title: Text(officeNames[id] ?? id),
