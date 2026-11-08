@@ -38,7 +38,9 @@ Movement reads/writes are checked against the related office(s).
 
 
 ## maintenance_records
-`assetId, assetLabel, title, description, priority, status, reportedAt, technician, resolution, cost, partsCost, previousAssetStatus, completedAt`
+`assetId, officeId, assetLabel, title, description, priority, status, reportedAt, technician, resolution, cost, partsCost, previousAssetStatus, completedAt`
+
+Every maintenance record must reference an existing asset and carry the same `officeId` as that asset. The application derives `officeId` from the linked asset during creation; Firestore rules independently verify the relationship and enforce office-scoped reads and writes. Legacy records without a valid asset/office link are not available to IT managers. Record deletion is disabled.
 
 ## spare_parts
 `name, sku, officeId, quantity, minimumQuantity, unitCost, supplier, createdAt, updatedAt`
@@ -49,7 +51,9 @@ Stock records must carry `officeId` for IT-manager access. Legacy records withou
 `partId, partName, maintenanceId, assetId, quantity, unitCost, totalCost, notes, usedAt`
 
 ## purchase_records
-`assetId, assetLabel, supplier, invoiceNumber, purchaseDate, warrantyUntil, totalCost, notes`
+`assetId, officeId, assetLabel, supplier, invoiceNumber, purchaseDate, warrantyUntil, totalCost, notes, createdAt`
+
+Every purchase record must reference an existing asset and carry the same `officeId` as that asset. The application derives `officeId` from the linked asset during creation; Firestore rules independently verify the relationship and enforce office-scoped reads and writes. Legacy records without a valid asset/office link are not available to IT managers. Record deletion is disabled.
 
 ## asset_movements
 `assetId, assetLabel, officeId, fromOfficeId, toOfficeId, movementType, occurredAt, maintenanceId, notes, cost, fromEmployee, toEmployee, fromOffice, toOffice`
@@ -83,4 +87,4 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 
 - `custody_cards`, `asset_documents` metadata, and `maintenance_parts` usage records are authorized through their `assetId` and the linked asset's `officeId`.
 - `asset_documents` metadata must carry the same `officeId` as its linked asset. Firebase Storage paths use `asset_documents/{assetId}/{fileName}`; Storage rules resolve the Firestore asset and its active office before allowing manager reads or uploads.
-- `maintenance_records` and `purchase_records` do not yet have client rules in this office-scoping phase. They remain unavailable to clients until a reviewed office/asset relationship and tests are added.
+- `maintenance_records` and `purchase_records` are office-scoped through their linked asset. Each record must carry an `officeId` matching the asset's current office; clients cannot forge this relationship, and deletes are denied.
