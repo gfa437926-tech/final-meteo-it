@@ -761,11 +761,20 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       ]);
       if (!mounted) return;
       final issueDocs = results[1].docs;
-      final allocationSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
-      for (var offset = 0; offset < issueDocs.length; offset += 30) {
-        final batch = issueDocs.skip(offset).take(30);
-        allocationSnapshots.addAll(await Future.wait(batch.map((doc) =>
-            db.collection('spare_part_allocations').doc(doc.id).get())));
+      final trackedIssueDocs = issueDocs.where((doc) {
+        final allocationId = doc.data()['allocationId'];
+        return allocationId is String && allocationId.isNotEmpty;
+      }).toList();
+      final allocationSnapshots =
+          <String, DocumentSnapshot<Map<String, dynamic>>>{};
+      for (var offset = 0; offset < trackedIssueDocs.length; offset += 30) {
+        final batch = trackedIssueDocs.skip(offset).take(30);
+        final snapshots = await Future.wait(batch.map((doc) =>
+            db.collection('spare_part_allocations')
+                .doc(doc.data()['allocationId'] as String).get()));
+        for (var index = 0; index < snapshots.length; index++) {
+          allocationSnapshots[batch.elementAt(index).id] = snapshots[index];
+        }
       }
       final receipts = results[0].docs.map((doc) {
         final value = doc.data();
@@ -778,7 +787,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       }).toList();
       final issues = issueDocs.asMap().entries.map((entry) {
         final value = entry.value.data();
-        final allocation = allocationSnapshots[entry.key].data();
+        final allocation = allocationSnapshots[entry.value.id]?.data();
         return <String, dynamic>{
           ...value, 'kind': 'صرف',
           'eventAt': value['usedAt'],
