@@ -67,7 +67,7 @@ Movement records are visible only to the global administrator or managers assign
 
 ## spare_parts/{partId}
 
-- `name`, `sku`, `quantity`, `minimumQuantity`, `unitCost`, `supplier`, `createdAt`, `updatedAt`
+- `name`, `sku`, `quantity`, `untrackedQuantity?`, `minimumQuantity`, `unitCost`, `supplier`, `createdAt`, `updatedAt`. `unitCost` and `supplier` describe the latest restock only; they are not used to infer a cost or supplier for legacy untracked units.
 
 ## maintenance_parts/{usageId}
 
