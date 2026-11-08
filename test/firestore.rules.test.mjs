@@ -895,6 +895,7 @@ test('spare part consumption requires one atomic stock, maintenance cost and usa
     const ticketRef = doc(manager, 'maintenance_records', 'parts-maintenance-a');
     const assetRef = doc(manager, 'assets', 'asset-1');
     const usageRef = doc(manager, 'maintenance_parts', 'usage-valid');
+    const allocationRef = doc(manager, 'spare_part_allocations', 'usage-valid');
     const part = await tx.get(partRef);
     const ticket = await tx.get(ticketRef);
     const asset = await tx.get(assetRef);
@@ -902,23 +903,36 @@ test('spare part consumption requires one atomic stock, maintenance cost and usa
     assert.equal(ticket.data().partsCost, 0);
     assert.equal(asset.data().officeId, 'office-a');
     tx.update(partRef, {
-      quantity: 8, lastUsageId: 'usage-valid', updatedAt: new Date(),
+      quantity: 8, untrackedQuantity: 8,
+      lastUsageId: 'usage-valid', updatedAt: new Date(),
     });
     tx.update(ticketRef, {
-      partsCost: 10, lastPartsUsageId: 'usage-valid', updatedAt: new Date(),
+      partsCost: 0, lastPartsUsageId: 'usage-valid', updatedAt: new Date(),
     });
     tx.set(usageRef, {
       partId: 'parts-part-a', partName: 'SSD',
       maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
-      officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
+      officeId: 'office-a', quantity: 2, unitCost: 0, totalCost: 0,
       notes: 'Replacement', usedAt: new Date(), createdBy: 'manager-1',
+      allocationId: 'usage-valid', allocationCount: 1, legacyQuantity: 2,
+      costAttributionComplete: false,
+    });
+    tx.set(allocationRef, {
+      usageId: 'usage-valid', partId: 'parts-part-a',
+      officeId: 'office-a', maintenanceId: 'parts-maintenance-a',
+      assetId: 'asset-1', quantity: 2, totalCost: 0,
+      lines: [{
+        sourceType: 'legacy_untracked', lotId: null, receiptId: null,
+        supplier: null, quantity: 2, unitCost: null, totalCost: null,
+      }],
+      createdAt: new Date(), createdBy: 'manager-1',
     });
   }));
 
   const partAfter = await getDoc(doc(manager, 'spare_parts', 'parts-part-a'));
   const ticketAfter = await getDoc(doc(manager, 'maintenance_records', 'parts-maintenance-a'));
   assert.equal(partAfter.data().quantity, 8);
-  assert.equal(ticketAfter.data().partsCost, 10);
+  assert.equal(ticketAfter.data().partsCost, 0);
 });
 
 test('spare usage cannot connect a part, maintenance ticket and asset across offices', async () => {
@@ -1026,25 +1040,40 @@ test('spare stock restocking requires an immutable office-scoped receipt in the 
   await assertSucceeds(runTransaction(managerA, async (tx) => {
     const partRef = doc(managerA, 'spare_parts', 'restock-part-a');
     const receiptRef = doc(managerA, 'spare_part_receipts', 'restock-valid');
+    const lotRef = doc(managerA, 'spare_part_lots', 'restock-valid');
+    const balanceRef = doc(managerA, 'spare_part_lot_balances', 'restock-valid');
     const part = await tx.get(partRef);
     const oldQuantity = part.data().quantity;
     const receivedQuantity = 5;
     const purchaseUnitCost = 12;
     const totalCost = receivedQuantity * purchaseUnitCost;
     const newQuantity = oldQuantity + receivedQuantity;
+    const now = new Date();
     tx.update(partRef, {
       quantity: newQuantity,
+      untrackedQuantity: oldQuantity,
       unitCost: purchaseUnitCost,
       supplier: 'New Supplier',
       lastRestockId: 'restock-valid',
-      updatedAt: new Date(),
+      updatedAt: now,
     });
     tx.set(receiptRef, {
-      partId: 'restock-part-a', officeId: 'office-a',
+      partId: 'restock-part-a', officeId: 'office-a', lotId: 'restock-valid',
       quantity: receivedQuantity, quantityBefore: oldQuantity,
       quantityAfter: newQuantity, unitCost: purchaseUnitCost,
       totalCost, supplier: 'New Supplier', notes: 'Invoice INV-5',
-      receivedAt: new Date(), createdAt: new Date(), createdBy: 'manager-1',
+      receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    tx.set(lotRef, {
+      partId: 'restock-part-a', officeId: 'office-a',
+      receiptId: 'restock-valid', supplier: 'New Supplier',
+      receivedQuantity, unitCost: purchaseUnitCost, totalCost,
+      receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    tx.set(balanceRef, {
+      lotId: 'restock-valid', partId: 'restock-part-a',
+      officeId: 'office-a', remainingQuantity: receivedQuantity,
+      createdAt: now, updatedAt: now, lastAllocationId: null,
     });
   }));
 
