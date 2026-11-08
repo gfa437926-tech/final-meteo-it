@@ -98,3 +98,8 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 - كل سجل صرف في `maintenance_parts` يحمل `partId` و`maintenanceId` و`assetId` و`officeId` و`quantity` و`unitCost` و`totalCost` و`usedAt`. يجب أن تتطابق المكاتب الثلاثة: القطعة وطلب الصيانة والأصل.
 - عملية الصرف تنشئ سجل الاستخدام بمعرّف ثابت، وتحدّث رصيد القطعة (`quantity` و`lastUsageId`) وتكلفة القطع في طلب الصيانة (`partsCost` و`lastPartsUsageId`) ضمن معاملة Firestore واحدة. لا يقبل العميل أي تحديث منفرد للمخزون أو التكلفة، ولا تعديل/حذف سجل الاستخدام بعد إنشائه.
 - الكمية المصروفة عدد صحيح موجب، وتكلفة الاستخدام تساوي `quantity × unitCost`، ويجب أن يبقى طلب الصيانة مفتوحاً وأن يكون الأصل في حالة الصيانة.
+
+
+## spare_part_receipts
+
+سجل توريد غير قابل للتعديل أو الحذف: `partId, officeId, quantity, quantityBefore, quantityAfter, unitCost, totalCost, supplier, notes, receivedAt, createdAt, createdBy`. يُنشأ فقط ضمن معاملة واحدة تحدث سجل `spare_parts` المرتبط. `createdBy` هو UID للمستخدم المصادق عليه، و`officeId` يطابق مكتب القطعة. تُحفظ تكلفة شراء الدفعة في الإيصال، ويُحدّث `spare_parts.unitCost` بمتوسط التكلفة المرجح. لا يسمح بزيادة الكمية أو تعديل المورد/متوسط التكلفة دون إيصال صحيح.
