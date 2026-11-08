@@ -110,6 +110,96 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     supplier.dispose();
   }
 
+
+  Future<void> _restock(QueryDocumentSnapshot<Map<String, dynamic>> part) async {
+    final form = GlobalKey<FormState>();
+    final quantity = TextEditingController(text: '1');
+    final cost = TextEditingController(text: '0');
+    final supplier = TextEditingController();
+    final notes = TextEditingController();
+    DateTime receivedAt = DateTime.now();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: Text('إعادة توريد: ${part.data()['name'] ?? ''}'),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: form,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  _field(quantity, 'الكمية المستلمة', numeric: true),
+                  _field(cost, 'تكلفة الوحدة عند الشراء', numeric: true),
+                  _field(supplier, 'اسم المورد'),
+                  _field(notes, 'ملاحظات (اختياري)', required: false),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: receivedAt,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+                        if (picked != null) {
+                          setDialog(() => receivedAt = DateTime(
+                            picked.year, picked.month, picked.day,
+                            receivedAt.hour, receivedAt.minute,
+                          ));
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today),
+                      label: Text('تاريخ الاستلام: ${receivedAt.toLocal().toString().split(' ').first}'),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () {
+                if (form.currentState!.validate()) Navigator.pop(ctx, true);
+              },
+              child: const Text('تأكيد إعادة التوريد'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) {
+      try {
+        await repository.restock(
+          partId: part.id,
+          quantity: int.parse(quantity.text),
+          unitCost: double.parse(cost.text),
+          supplier: supplier.text,
+          notes: notes.text,
+          receivedAt: receivedAt,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم تسجيل التوريد وتحديث الرصيد والتكلفة')),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تعذرت إعادة التوريد: $error')),
+          );
+        }
+      }
+    }
+    quantity.dispose();
+    cost.dispose();
+    supplier.dispose();
+    notes.dispose();
+  }
+
   Future<void> _consume(QueryDocumentSnapshot<Map<String, dynamic>> part) async {
     final form = GlobalKey<FormState>();
     final amount = TextEditingController(text: '1');
@@ -264,9 +354,19 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       'الرصيد: $stock • حد التنبيه: $minimum • تكلفة الوحدة: ${data['unitCost'] ?? 0}',
                     ),
                     isThreeLine: true,
-                    trailing: FilledButton.tonal(
-                      onPressed: stock > 0 ? () => _consume(part) : null,
-                      child: const Text('صرف'),
+                    trailing: Wrap(
+                      spacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _restock(part),
+                          icon: const Icon(Icons.add_box_outlined, size: 18),
+                          label: const Text('توريد'),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: stock > 0 ? () => _consume(part) : null,
+                          child: const Text('صرف'),
+                        ),
+                      ],
                     ),
                   ),
                 );
