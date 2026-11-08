@@ -139,20 +139,28 @@ class SparePartsRepository {
       while (true) {
         final pageQuery = cursor == null ? query : query.startAfterDocument(cursor);
         final page = await pageQuery.get();
-        final allocationSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
+        final allocationSnapshots =
+            <String, DocumentSnapshot<Map<String, dynamic>>>{};
         if (!incoming) {
-          for (var offset = 0; offset < page.docs.length; offset += 30) {
-            final batch = page.docs.skip(offset).take(30);
-            allocationSnapshots.addAll(await Future.wait(batch.map((doc) =>
-                db.collection('spare_part_allocations').doc(doc.id).get())));
+          final trackedDocs = page.docs.where((doc) {
+            final allocationId = doc.data()['allocationId'];
+            return allocationId is String && allocationId.isNotEmpty;
+          }).toList();
+          for (var offset = 0; offset < trackedDocs.length; offset += 30) {
+            final batch = trackedDocs.skip(offset).take(30);
+            final snapshots = await Future.wait(batch.map((doc) =>
+                db.collection('spare_part_allocations')
+                    .doc(doc.data()['allocationId'] as String).get()));
+            for (var index = 0; index < snapshots.length; index++) {
+              allocationSnapshots[batch.elementAt(index).id] = snapshots[index];
+            }
           }
         }
-        for (var index = 0; index < page.docs.length; index++) {
-          final doc = page.docs[index];
+        for (final doc in page.docs) {
           final data = doc.data();
           final allocationData = incoming
               ? null
-              : allocationSnapshots[index].data();
+              : allocationSnapshots[doc.id]?.data();
           final rawDate = data[dateField];
           final eventDate = rawDate is Timestamp ? rawDate.toDate() :
               rawDate is DateTime ? rawDate : null;
@@ -311,6 +319,9 @@ class SparePartsRepository {
         throw StateError('تجاوز الحد المسموح لكمية المخزون');
       }
       final totalCost = quantity * unitCost;
+      if (!totalCost.isFinite) {
+        throw ArgumentError('إجمالي تكلفة التوريد يتجاوز النطاق الرقمي المسموح');
+      }
       final now = FieldValue.serverTimestamp();
       transaction.update(partRef, {
         'quantity': newQuantity,
@@ -522,16 +533,14 @@ class SparePartsRepository {
       if (remainingToAllocate > 0) {
         throw StateError('الرصيد المسجل في دفعات التوريد لا يغطي الكمية المطلوبة');
       }
-      if (lines.length > 2) {
-        throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
-      }
-
       final totalCost = lines.fold<double>(0, (runningTotal, line) =>
           runningTotal + ((line['totalCost'] as num?)?.toDouble() ?? 0));
       final averageUnitCost = totalCost / quantity;
       final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
-      if (!previousPartsCost.isFinite || previousPartsCost < 0) {
-        throw StateError('تكلفة القطع السابقة غير صالحة');
+      final newPartsCost = previousPartsCost + totalCost;
+      if (!previousPartsCost.isFinite || previousPartsCost < 0 ||
+          !newPartsCost.isFinite || !averageUnitCost.isFinite) {
+        throw StateError('قيمة تكلفة القطع خارج النطاق الرقمي المسموح');
       }
       final now = FieldValue.serverTimestamp();
 
@@ -542,7 +551,7 @@ class SparePartsRepository {
         'updatedAt': now,
       });
       transaction.update(ticketRef, {
-        'partsCost': previousPartsCost + totalCost,
+        'partsCost': newPartsCost,
         'lastPartsUsageId': usageRef.id,
         'updatedAt': now,
       });
