@@ -456,6 +456,10 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
               final date = event['eventAt'] as DateTime;
               annualGroups.putIfAbsent(date.year.toString(), () => <Map<String, dynamic>>[]).add(event);
             }
+            final sortedMonthly = periodGroups.entries.toList()
+              ..sort((a, b) => a.key.compareTo(b.key));
+            final sortedAnnual = annualGroups.entries.toList()
+              ..sort((a, b) => a.key.compareTo(b.key));
             final supplierTotals = <String, List<Map<String, dynamic>>>{};
             for (final event in officeEvents.where((e) => e['isIncoming'] == true)) {
               final name = event['supplier'] as String? ?? 'غير محدد';
@@ -533,8 +537,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                           child: Text('لا توجد بيانات شهرية ضمن الفترة.'),
                         )
                       else
-                        ...periodGroups.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
-                            .map((entry) {
+                        ...sortedMonthly.map((entry) {
                               final rows = entry.value;
                               final received = rows.where((e) => e['isIncoming'] == true).toList();
                               final issued = rows.where((e) => e['isIncoming'] != true).toList();
@@ -553,8 +556,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                           child: Text('لا توجد بيانات سنوية ضمن الفترة.'),
                         )
                       else
-                        ...annualGroups.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
-                            .map((entry) {
+                        ...sortedAnnual.map((entry) {
                               final rows = entry.value;
                               final received = rows.where((e) => e['isIncoming'] == true).toList();
                               final issued = rows.where((e) => e['isIncoming'] != true).toList();
