@@ -22,7 +22,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     final minimum = TextEditingController(text: '1');
     final cost = TextEditingController(text: '0');
     final supplier = TextEditingController();
-    final offices = await OfficeRepository().watchOffices().first;
+    final offices = (await OfficeRepository().watchOffices().first)
+        .where((office) => office.isActive).toList();
     if (!mounted) return;
     if (offices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -44,6 +45,16 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
             key: form,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
+                DropdownButtonFormField<String>(
+                  value: selectedOfficeId,
+                  decoration: const InputDecoration(labelText: 'المكتب'),
+                  items: offices.map((office) => DropdownMenuItem(
+                    value: office.id, child: Text(office.name),
+                  )).toList(),
+                  onChanged: (value) => setDialog(() => selectedOfficeId = value),
+                  validator: (value) => value == null ? 'اختر المكتب' : null,
+                ),
+                const SizedBox(height: 10),
                 _field(name, 'اسم القطعة'),
                 _field(sku, 'رمز القطعة / SKU'),
                 _field(quantity, 'الكمية الحالية', numeric: true),
