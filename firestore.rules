@@ -390,34 +390,22 @@ service cloud.firestore {
         getAfter(balancePath).data.updatedAt is timestamp;
     }
     function validAllocationLines(lines, usageId, usage) {
-      return lines is list && lines.size() >= 1 && lines.size() <= 5 &&
+      return lines is list && lines.size() >= 1 && lines.size() <= 2 &&
         allocationLineQuantity(lines, 0) +
-          allocationLineQuantity(lines, 1) +
-          allocationLineQuantity(lines, 2) +
-          allocationLineQuantity(lines, 3) +
-          allocationLineQuantity(lines, 4) == usage.quantity &&
+          allocationLineQuantity(lines, 1) == usage.quantity &&
         allocationLineCost(lines, 0) +
-          allocationLineCost(lines, 1) +
-          allocationLineCost(lines, 2) +
-          allocationLineCost(lines, 3) +
-          allocationLineCost(lines, 4) == usage.totalCost &&
+          allocationLineCost(lines, 1) == usage.totalCost &&
         allocationLineLegacyQuantity(lines, 0) +
-          allocationLineLegacyQuantity(lines, 1) +
-          allocationLineLegacyQuantity(lines, 2) +
-          allocationLineLegacyQuantity(lines, 3) +
-          allocationLineLegacyQuantity(lines, 4) == usage.legacyQuantity &&
+          allocationLineLegacyQuantity(lines, 1) == usage.legacyQuantity &&
         validAllocationLine(lines, 0, usageId, usage) &&
-        validAllocationLine(lines, 1, usageId, usage) &&
-        validAllocationLine(lines, 2, usageId, usage) &&
-        validAllocationLine(lines, 3, usageId, usage) &&
-        validAllocationLine(lines, 4, usageId, usage);
+        validAllocationLine(lines, 1, usageId, usage);
     }
     function validAllocationBatch(usageId, usage) {
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
       let allocation = getAfter(allocationPath).data;
       return usage.allocationId == usageId &&
         usage.allocationCount is int &&
-        usage.allocationCount >= 1 && usage.allocationCount <= 5 &&
+        usage.allocationCount >= 1 && usage.allocationCount <= 2 &&
         usage.legacyQuantity is int &&
         usage.legacyQuantity >= 0 && usage.legacyQuantity <= usage.quantity &&
         usage.costAttributionComplete == (usage.legacyQuantity == 0) &&
@@ -804,10 +792,7 @@ service cloud.firestore {
         allocation.partId == resource.data.partId &&
         allocation.officeId == resource.data.officeId &&
         (allocationContainsLotLine(allocation.lines, 0, lotId, issuedQuantity) ||
-         allocationContainsLotLine(allocation.lines, 1, lotId, issuedQuantity) ||
-         allocationContainsLotLine(allocation.lines, 2, lotId, issuedQuantity) ||
-         allocationContainsLotLine(allocation.lines, 3, lotId, issuedQuantity) ||
-         allocationContainsLotLine(allocation.lines, 4, lotId, issuedQuantity));
+         allocationContainsLotLine(allocation.lines, 1, lotId, issuedQuantity));
     }
     function validSparePartAllocationCreate(allocationId, data) {
       let usagePath = /databases/$(database)/documents/maintenance_parts/$(allocationId);
