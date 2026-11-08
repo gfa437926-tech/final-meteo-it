@@ -29,12 +29,14 @@ Office reads are restricted to assigned managers; only the global administrator 
 `technology, functions[], colorMode, paperSizes[], ppm, memoryMB, tonerModel, ipAddress, connectivity[]`
 
 ## custody_cards
-`id, assetId, assetLabel, employeeName, officeName, assignedAt, status, approvalStatus, approvedBy?, approvedAt?, rejectedBy?, rejectedAt?, rejectionReason?, notes`
+`id, assetId, officeId, assetLabel, employeeName, officeName, assignedAt, status, approvalStatus, approvedBy?, approvedAt?, rejectedBy?, rejectedAt?, rejectionReason?, notes`
+
+New custody cards derive `officeId` from the linked asset. Manager queries must include assigned active `officeId` values; legacy cards without `officeId` remain global-administrator-only.
 
 ## movement records
 `id, assetId, officeId, fromOfficeId, toOfficeId, fromCustodianId, toCustodianId, movedAt, documentNumber, reason, actorId`
 
-Movement reads/writes are checked against the related office(s).
+Movement reads/writes are checked against the related office(s). Every movement created by asset, custody, purchase, or maintenance workflows carries the linked asset's `officeId`; transfers additionally validate both source and destination offices.
 
 
 ## maintenance_records
