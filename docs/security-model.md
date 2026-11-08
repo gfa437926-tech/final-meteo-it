@@ -89,3 +89,11 @@ Until all six values are configured, the deployed site intentionally shows a Fir
 
 
 **Maintenance query boundary:** `maintenance_records.officeId` is the queryable tenant boundary for manager reads. All client creation and update paths still verify that the referenced asset belongs to that office; records without `officeId` remain administrator-only. Manager UI filters open statuses after the office-scoped query to avoid combining multiple Firestore `in` filters beyond the 30-disjunction limit.
+
+
+## إعادة توريد مخزون قطع الغيار
+
+- كل إعادة توريد تنشئ سجلاً append-only في `spare_part_receipts` يحمل القطعة والمكتب والكمية قبل وبعد التوريد وتكلفة الشراء للوحدة والإجمالي والمورد والملاحظات وتاريخ الاستلام ووقت التسجيل وهوية المنفذ من جلسة Firebase الموثقة.
+- يجب أن يُنشأ إيصال التوريد وتُحدّث كمية القطعة والمورد ومتوسط تكلفة الوحدة المرجح في معاملة Firestore واحدة. قواعد Firestore تتحقق من تطابق المكتب والقطعة والمنفذ ومعرّف الإيصال ومن معادلة الكمية والتكلفة.
+- متوسط تكلفة الوحدة بعد التوريد = `(قيمة المخزون السابق + إجمالي تكلفة التوريد) ÷ الكمية الجديدة`. يحتفظ الإيصال بتكلفة الشراء الفعلية للدفعة، بينما يحتفظ سجل القطعة بمتوسط التكلفة المرجح.
+- لا يسمح بزيادة الرصيد أو تغيير المورد أو متوسط التكلفة دون إيصال مطابق، ولا يسمح بتعديل أو حذف إيصالات التوريد. السجلات مقروءة ضمن نطاق المكتب، والمدير العام يملك القراءة الشاملة.
