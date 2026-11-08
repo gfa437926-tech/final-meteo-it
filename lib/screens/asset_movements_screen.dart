@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/asset_repository.dart';
 import 'package:flutter/material.dart';
 
 class AssetMovementsScreen extends StatelessWidget {
@@ -26,7 +27,7 @@ class AssetMovementsScreen extends StatelessWidget {
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('سجل حركة الأجهزة')),
     body: StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('asset_movements').orderBy('occurredAt', descending: true).limit(250).snapshots(),
+      stream: AssetRepository().watchMovementDocuments(limit: 250),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('تعذر تحميل سجل الحركات: ${snapshot.error}')));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
