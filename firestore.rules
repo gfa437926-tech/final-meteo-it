@@ -358,40 +358,37 @@ service cloud.firestore {
     function validSparePartRestock(partId) {
       let restockId = request.resource.data.get('lastRestockId', null);
       let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(restockId);
+      let receipt = getAfter(receiptPath).data;
       let oldQuantity = resource.data.quantity;
       return restockId is string && existsAfter(receiptPath) &&
         request.resource.data.officeId == resource.data.officeId &&
-        getAfter(receiptPath).data.partId == partId &&
-        getAfter(receiptPath).data.officeId == resource.data.officeId &&
-        getAfter(receiptPath).data.createdBy == request.auth.uid &&
-        getAfter(receiptPath).data.quantityBefore == oldQuantity &&
-        getAfter(receiptPath).data.quantityAfter == request.resource.data.quantity &&
-        getAfter(receiptPath).data.quantity is int &&
-        getAfter(receiptPath).data.quantity > 0 &&
-        request.resource.data.quantity == oldQuantity + getAfter(receiptPath).data.quantity &&
-        getAfter(receiptPath).data.unitCost is number &&
-        getAfter(receiptPath).data.unitCost >= 0 &&
-        getAfter(receiptPath).data.totalCost ==
-          getAfter(receiptPath).data.quantity * getAfter(receiptPath).data.unitCost &&
+        receipt.partId == partId &&
+        receipt.officeId == resource.data.officeId &&
+        receipt.createdBy == request.auth.uid &&
+        receipt.quantityBefore == oldQuantity &&
+        receipt.quantityAfter == request.resource.data.quantity &&
+        receipt.quantity is int && receipt.quantity > 0 &&
+        request.resource.data.quantity == oldQuantity + receipt.quantity &&
+        receipt.unitCost is number && receipt.unitCost >= 0 &&
+        receipt.totalCost == receipt.quantity * receipt.unitCost &&
         request.resource.data.unitCost ==
-          ((oldQuantity * resource.data.unitCost) + getAfter(receiptPath).data.totalCost) /
+          ((oldQuantity * resource.data.unitCost) + receipt.totalCost) /
             request.resource.data.quantity &&
-        request.resource.data.supplier == getAfter(receiptPath).data.supplier &&
+        request.resource.data.supplier == receipt.supplier &&
         request.resource.data.lastRestockId == restockId &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['quantity', 'unitCost', 'supplier', 'lastRestockId', 'updatedAt']) &&
         request.resource.data.updatedAt is timestamp &&
-        getAfter(receiptPath).data.receivedAt is timestamp &&
-        getAfter(receiptPath).data.createdAt is timestamp &&
-        getAfter(receiptPath).data.supplier is string &&
-        getAfter(receiptPath).data.supplier.size() > 0 &&
-        getAfter(receiptPath).data.notes is string &&
-        getAfter(receiptPath).data.keys().hasOnly([
+        receipt.receivedAt is timestamp &&
+        receipt.createdAt is timestamp &&
+        receipt.supplier is string && receipt.supplier.size() > 0 &&
+        receipt.notes is string &&
+        receipt.keys().hasOnly([
           'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
         ]) &&
-        getAfter(receiptPath).data.keys().hasAll([
+        receipt.keys().hasAll([
           'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
           'createdAt', 'createdBy'
@@ -401,6 +398,7 @@ service cloud.firestore {
 
     function validSparePartReceiptCreate(receiptId, data) {
       let partPath = /databases/$(database)/documents/spare_parts/$(data.partId);
+      let partAfter = getAfter(partPath).data;
       return isActiveUser() && data.keys().hasOnly([
           'partId', 'officeId', 'quantity', 'quantityBefore', 'quantityAfter',
           'unitCost', 'totalCost', 'supplier', 'notes', 'receivedAt',
@@ -424,9 +422,9 @@ service cloud.firestore {
         data.createdBy == request.auth.uid &&
         hasOfficeAccess(data.officeId) &&
         existsAfter(partPath) &&
-        getAfter(partPath).data.officeId == data.officeId &&
-        getAfter(partPath).data.quantity == data.quantityAfter &&
-        getAfter(partPath).data.lastRestockId == receiptId;
+        partAfter.officeId == data.officeId &&
+        partAfter.quantity == data.quantityAfter &&
+        partAfter.lastRestockId == receiptId;
     }
 
     function validSparePart(data, officeId) {
