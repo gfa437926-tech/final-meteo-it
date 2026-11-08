@@ -139,10 +139,14 @@ class SparePartsRepository {
       while (true) {
         final pageQuery = cursor == null ? query : query.startAfterDocument(cursor);
         final page = await pageQuery.get();
-        final allocationSnapshots = incoming
-            ? <DocumentSnapshot<Map<String, dynamic>>>[]
-            : await Future.wait(page.docs.map((doc) =>
-                db.collection('spare_part_allocations').doc(doc.id).get()));
+        final allocationSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
+        if (!incoming) {
+          for (var offset = 0; offset < page.docs.length; offset += 30) {
+            final batch = page.docs.skip(offset).take(30);
+            allocationSnapshots.addAll(await Future.wait(batch.map((doc) =>
+                db.collection('spare_part_allocations').doc(doc.id).get())));
+          }
+        }
         for (var index = 0; index < page.docs.length; index++) {
           final doc = page.docs[index];
           final data = doc.data();
