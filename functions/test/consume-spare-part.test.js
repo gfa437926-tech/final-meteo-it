@@ -151,6 +151,38 @@ test('insufficient tracked and legacy balance leaves every record unchanged', as
   assert.equal((await db.collection('spare_part_allocations').get()).size, 0);
 });
 
+test('inactive office blocks consumption without changing inventory', async () => {
+  await seedInventory();
+  await db.doc('offices/office-a').update({ isActive: false });
+  await assert.rejects(
+    consumeSparePartCore({
+      db, uid: 'manager-1',
+      data: { partId: 'part-a', maintenanceId: 'ticket-a', quantity: 1 },
+      FieldValue,
+    }),
+    (error) => error.code === 'failed-precondition',
+  );
+  assert.equal((await db.doc('spare_parts/part-a').get()).data().quantity, 14);
+  assert.equal((await db.collection('maintenance_parts').get()).size, 0);
+});
+
+test('tampered or missing receipt provenance aborts the entire FIFO transaction', async () => {
+  await seedInventory();
+  await db.doc('spare_part_receipts/lot-1').update({ supplier: 'Forged supplier' });
+  await assert.rejects(
+    consumeSparePartCore({
+      db, uid: 'manager-1',
+      data: { partId: 'part-a', maintenanceId: 'ticket-a', quantity: 4 },
+      FieldValue,
+    }),
+    (error) => error.code === 'failed-precondition',
+  );
+  assert.equal((await db.doc('spare_parts/part-a').get()).data().quantity, 14);
+  assert.equal((await db.doc('spare_part_lot_balances/lot-1').get()).data().remainingQuantity, 4);
+  assert.equal((await db.doc('maintenance_records/ticket-a').get()).data().partsCost, 0);
+  assert.equal((await db.collection('maintenance_parts').get()).size, 0);
+});
+
 test('concurrent consumption cannot oversell a lot or stock quantity', async () => {
   await seedInventory({
     quantity: 10,
