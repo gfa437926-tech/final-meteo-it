@@ -759,20 +759,34 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
             .where('officeId', isEqualTo: officeId).get(),
       ]);
       if (!mounted) return;
+      final issueDocs = results[1].docs;
+      final allocationSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
+      for (var offset = 0; offset < issueDocs.length; offset += 30) {
+        final batch = issueDocs.skip(offset).take(30);
+        allocationSnapshots.addAll(await Future.wait(batch.map((doc) =>
+            db.collection('spare_part_allocations').doc(doc.id).get())));
+      }
       final receipts = results[0].docs.map((doc) {
         final value = doc.data();
         return <String, dynamic>{
           ...value, 'kind': 'توريد',
           'eventAt': value['receivedAt'] ?? value['createdAt'],
           'quantityDelta': (value['quantity'] as num?)?.toInt() ?? 0,
+          'isIncoming': true,
         };
       }).toList();
-      final issues = results[1].docs.map((doc) {
-        final value = doc.data();
+      final issues = issueDocs.asMap().entries.map((entry) {
+        final value = entry.value.data();
+        final allocation = allocationSnapshots[entry.key].data();
         return <String, dynamic>{
           ...value, 'kind': 'صرف',
           'eventAt': value['usedAt'],
           'quantityDelta': -((value['quantity'] as num?)?.toInt() ?? 0),
+          'allocationLines': allocation?['lines'] is List
+              ? allocation!['lines'] as List
+              : const <dynamic>[],
+          'costAttributionComplete': value['costAttributionComplete'] == true,
+          'isIncoming': false,
         };
       }).toList();
       final events = <Map<String, dynamic>>[...receipts, ...issues]
@@ -791,8 +805,23 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       final issuedCost = issues.fold<double>(0, (total, row) => total + ((row['totalCost'] as num?)?.toDouble() ?? 0));
       final closing = (data['quantity'] as num?)?.toInt() ?? 0;
       final opening = closing - received + consumed;
-      final suppliers = receipts.map((row) => row['supplier'] as String? ?? '')
-          .where((name) => name.isNotEmpty).toSet().toList()..sort();
+      final supplierSet = <String>{};
+      for (final row in receipts) {
+        final supplier = row['supplier'] as String? ?? '';
+        if (supplier.isNotEmpty) supplierSet.add(supplier);
+      }
+      for (final issue in issues) {
+        final lines = issue['allocationLines'];
+        if (lines is List) {
+          for (final line in lines) {
+            if (line is Map && line['sourceType'] == 'lot' &&
+                line['supplier'] is String) {
+              supplierSet.add(line['supplier'] as String);
+            }
+          }
+        }
+      }
+      final suppliers = supplierSet.toList()..sort();
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -832,8 +861,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         dense: true,
                         leading: Icon(event['kind'] == 'توريد'
                             ? Icons.call_received : Icons.call_made),
-                        title: Text('${event['kind']} • ${event['supplier'] ?? event['partName'] ?? 'قطعة غيار'}'),
-                        subtitle: Text('${date?.toLocal().toString().split('.').first ?? 'تاريخ غير متاح'} • المنفذ: ${actor.isEmpty ? 'مسجل في طلب الصيانة' : actor}'),
+                        title: Text('${event['kind']} • ${event['kind'] == 'توريد' ? event['supplier'] ?? 'مورد غير محدد' : _movementSupplierSummary(event)}'),
+                        subtitle: Text('${date?.toLocal().toString().split('.').first ?? 'تاريخ غير متاح'} • المنفذ: ${actor.isEmpty ? 'مسجل في طلب الصيانة' : actor}${event['kind'] == 'صرف' && event['costAttributionComplete'] != true ? ' • تكلفة غير مكتملة النسبة' : ''}'),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -845,6 +874,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       );
                     }),
                   const SizedBox(height: 8),
+                  const Text('المورد المعروض للصرف مستمد من دفعات FIFO الفعلية. الرصيد التاريخي غير المنسوب لا يحمل مورداً أو تكلفة مفترضة.',
+                      style: TextStyle(fontSize: 12)),
+                  const SizedBox(height: 6),
                   const Text('السجلات الأصلية محفوظة للقراءة فقط؛ لا يمكن تعديلها أو حذفها من التطبيق.',
                       style: TextStyle(fontSize: 12)),
                 ],
