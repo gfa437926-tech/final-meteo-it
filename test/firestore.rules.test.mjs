@@ -227,9 +227,10 @@ test('custody assignment requires atomic asset reservation and pending approval'
     tx.update(doc(db, 'assets', 'asset-1'), { status: 'assigned' });
     tx.set(doc(db, 'custody_cards', 'card-1'), {
       assetId: 'asset-1',
+      officeId: 'office-a',
       assetLabel: 'Dell OptiPlex',
       employeeName: 'Test Employee',
-      officeName: 'تقنية المعلومات',
+      officeName: 'Office A',
       status: 'active',
       approvalStatus: 'pending',
     });
