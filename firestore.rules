@@ -401,7 +401,6 @@ service cloud.firestore {
         validAllocationLine(lines, 1, usageId, usage);
     }
     function validAllocationBatch(usageId, usage) {
-      let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
       let allocationPath = /databases/$(database)/documents/spare_part_allocations/$(usageId);
       let allocation = getAfter(allocationPath).data;
       // A stock issue and its allocation are one-time events. Existing immutable
@@ -460,7 +459,9 @@ service cloud.firestore {
         getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
         getAfter(ticketPath).data.assetId == usage.assetId &&
         getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
-        hasOfficeAccess(usage.officeId);
+        hasOfficeAccess(usage.officeId) &&
+        // Validate the immutable FIFO allocation exactly once on usage creation.
+        validAllocationBatch(usageId, usage);
     }
 
     function validSparePartRestock(partId) {
