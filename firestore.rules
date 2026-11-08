@@ -595,8 +595,12 @@ service cloud.firestore {
       allow create: if canWriteAsset(request.resource.data) &&
         validSparePart(request.resource.data, request.resource.data.officeId);
       // Stock changes only through a validated atomic usage or receipt.
-      allow update: if canWriteAsset(resource.data) &&
-        (validSparePartConsumption(partId) || validSparePartRestock(partId));
+      allow update: if canWriteAsset(resource.data) && (
+        (request.resource.data.keys().hasAny(['lastUsageId']) &&
+          validSparePartConsumption(partId)) ||
+        (request.resource.data.keys().hasAny(['lastRestockId']) &&
+          validSparePartRestock(partId))
+      );
       allow delete: if false;
     }
 
