@@ -420,7 +420,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         TextCellValue('كمية التوريد'),
         TextCellValue('تكلفة التوريد'),
         TextCellValue('كمية الصرف'),
-        TextCellValue('قيمة الصرف'),
+        TextCellValue('قيمة الصرف الموثقة'),
       ]);
       final keys = grouped.keys.toList()..sort();
       for (final key in keys) {
