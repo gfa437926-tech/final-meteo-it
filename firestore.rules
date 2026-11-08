@@ -96,7 +96,13 @@ service cloud.firestore {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let assetId = resource.data.assetId;
       let assetAfter = getAfter(/databases/$(database)/documents/assets/$(assetId)).data;
-      return isAdmin() && canAccessAssetId(resource.data.assetId) && (
+      let assetPath = /databases/$(database)/documents/assets/$(resource.data.assetId);
+      return isAdmin() &&
+        resource.data.get('officeId', null) is string &&
+        hasOfficeAccess(resource.data.officeId) &&
+        exists(assetPath) &&
+        get(assetPath).data.officeId == resource.data.officeId &&
+        canAccessAssetId(resource.data.assetId) && (
         (
           approvalBefore == 'pending' &&
           resource.data.status == 'active' &&
@@ -265,13 +271,23 @@ service cloud.firestore {
     }
 
     match /custody_cards/{cardId} {
-      allow read: if canAccessAssetId(resource.data.assetId);
+      // Legacy custody cards without officeId remain administrator-only.
+      allow read: if isSuperAdmin() ||
+        (resource.data.get('officeId', null) is string &&
+         hasOfficeAccess(resource.data.officeId));
       allow create: if isAdmin() &&
+        request.resource.data.assetId is string &&
+        request.resource.data.officeId is string &&
         canAccessAssetId(request.resource.data.assetId) &&
+        get(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeId ==
+          request.resource.data.officeId &&
         request.resource.data.status == 'active' &&
         request.resource.data.approvalStatus == 'pending' &&
-        getAfter(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.status == 'assigned';
-      allow update: if custodyUpdateAllowed();
+        getAfter(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.status == 'assigned' &&
+        getAfter(/databases/$(database)/documents/assets/$(request.resource.data.assetId)).data.officeName ==
+          request.resource.data.officeName;
+      allow update: if custodyUpdateAllowed() &&
+        request.resource.data.officeId == resource.data.officeId;
       allow delete: if false;
     }
 
