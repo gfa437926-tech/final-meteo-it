@@ -292,6 +292,26 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
 
 
+  String _movementSupplierSummary(Map<String, dynamic> event) {
+    if (event['isIncoming'] == true) {
+      return event['supplier']?.toString() ?? '';
+    }
+    final lines = event['allocationLines'];
+    if (lines is! List) return 'قديم غير منسوب';
+    final suppliers = <String>{};
+    var hasLegacy = false;
+    for (final line in lines) {
+      if (line is! Map) continue;
+      if (line['sourceType'] == 'legacy_untracked') hasLegacy = true;
+      if (line['sourceType'] == 'lot' && line['supplier'] is String) {
+        suppliers.add(line['supplier'] as String);
+      }
+    }
+    final labels = suppliers.toList()..sort();
+    if (hasLegacy) labels.add('رصيد تاريخي غير منسوب');
+    return labels.join('، ');
+  }
+
   List<Map<String, dynamic>> _filterMovementEvents(
     List<Map<String, dynamic>> events, {
     required String? selectedOffice,
@@ -355,6 +375,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       TextCellValue('طلب الصيانة'),
       TextCellValue('المنفذ'),
       TextCellValue('معرّف الحركة'),
+      TextCellValue('مصدر المورد'),
+      TextCellValue('اكتمال نسبة التكلفة'),
     ]);
     for (final event in filtered) {
       final date = event['eventAt'] as DateTime;
@@ -371,6 +393,12 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
         TextCellValue(event['maintenanceId']?.toString() ?? ''),
         TextCellValue(event['createdBy']?.toString() ?? ''),
         TextCellValue(event['eventId']?.toString() ?? ''),
+        TextCellValue(_movementSupplierSummary(event)),
+        TextCellValue(event['isIncoming'] == true
+            ? 'غير منطبق'
+            : event['costAttributionComplete'] == true
+                ? 'مكتملة'
+                : 'جزئية / رصيد تاريخي غير منسوب'),
       ]);
     }
 
@@ -568,6 +596,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         _historyMetric('تكلفة التوريد', costOf(incoming).toStringAsFixed(2)),
                         _historyMetric('الكمية المصروفة', quantityOf(outgoing).toString()),
                         _historyMetric('قيمة الصرف', costOf(outgoing).toStringAsFixed(2)),
+                        _historyMetric('صرف غير مكتمل النسبة', events.where((e) =>
+                          e['isIncoming'] == false && e['costAttributionComplete'] != true).length.toString()),
                       ]),
                       const Divider(height: 24),
                       const Text('المقارنة حسب المكتب', style: TextStyle(fontWeight: FontWeight.bold)),
