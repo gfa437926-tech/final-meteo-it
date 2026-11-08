@@ -369,20 +369,16 @@ service cloud.firestore {
     function validLotAllocationLine(line, usageId, usage) {
       let lotPath = /databases/$(database)/documents/spare_part_lots/$(line.lotId);
       let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(line.lotId);
-      let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(line.receiptId);
       return line.lotId is string && line.receiptId is string &&
         line.supplier is string && line.unitCost is number &&
         line.unitCost >= 0 && line.totalCost is number &&
         line.totalCost == line.quantity * line.unitCost &&
-        exists(lotPath) && exists(balancePath) && exists(receiptPath) &&
+        exists(lotPath) && exists(balancePath) &&
         get(lotPath).data.partId == usage.partId &&
         get(lotPath).data.officeId == usage.officeId &&
         get(lotPath).data.receiptId == line.receiptId &&
         get(lotPath).data.supplier == line.supplier &&
         get(lotPath).data.unitCost == line.unitCost &&
-        get(receiptPath).data.partId == usage.partId &&
-        get(receiptPath).data.officeId == usage.officeId &&
-        get(receiptPath).data.lotId == line.lotId &&
         get(balancePath).data.remainingQuantity >= line.quantity &&
         getAfter(balancePath).data.remainingQuantity ==
           get(balancePath).data.remainingQuantity - line.quantity &&
@@ -459,15 +455,9 @@ service cloud.firestore {
         usage.totalCost is number && usage.totalCost >= 0 &&
         usage.notes is string && usage.usedAt is timestamp &&
         usage.createdBy == request.auth.uid &&
-        existsAfter(partPath) && existsAfter(ticketPath) && exists(assetPath) &&
+        exists(assetPath) &&
         get(assetPath).data.officeId == usage.officeId &&
         get(assetPath).data.status == 'maintenance' &&
-        getAfter(partPath).data.officeId == usage.officeId &&
-        getAfter(partPath).data.get('lastUsageId', null) == usageId &&
-        getAfter(ticketPath).data.officeId == usage.officeId &&
-        getAfter(ticketPath).data.get('lastPartsUsageId', null) == usageId &&
-        getAfter(ticketPath).data.assetId == usage.assetId &&
-        getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
         hasOfficeAccess(usage.officeId) &&
         validAllocationBatch(usageId, usage);
     }
