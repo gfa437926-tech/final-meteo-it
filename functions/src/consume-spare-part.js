@@ -145,9 +145,14 @@ export async function consumeSparePartCore({ db, uid, data, FieldValue }) {
           receipt.partId !== partId || receipt.officeId !== officeId ||
           receipt.lotId !== lotDocument.id ||
           receipt.quantity !== lot.receivedQuantity ||
+          !Number.isSafeInteger(receipt.quantityBefore) || receipt.quantityBefore < 0 ||
+          receipt.quantityAfter !== receipt.quantityBefore + receipt.quantity ||
           receipt.supplier !== lot.supplier ||
           receipt.unitCost !== lot.unitCost ||
           receipt.totalCost !== lot.totalCost ||
+          lot.totalCost !== lot.receivedQuantity * lot.unitCost ||
+          receipt.createdBy !== lot.createdBy ||
+          receipt.createdAt?.toMillis?.() !== lot.createdAt?.toMillis?.() ||
           receipt.receivedAt?.toMillis?.() !== lot.receivedAt?.toMillis?.()) {
         fail('failed-precondition', 'بيانات دفعة التوريد لا تطابق إيصالها أو رصيدها');
       }
