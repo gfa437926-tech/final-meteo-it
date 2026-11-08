@@ -628,6 +628,27 @@ test('custody cards and Firestore attachment metadata follow the linked asset of
   }));
 });
 
+test('maintenance completion must atomically restore the linked asset status', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'maintenance_records', 'maintenance-completion'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'Atomic completion',
+      status: 'open', reportedAt: new Date(), previousAssetStatus: 'available',
+    });
+    await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
+  });
+  await assertFails(updateDoc(doc(manager, 'maintenance_records', 'maintenance-completion'), {
+    status: 'completed', resolution: 'Repaired', cost: 10, completedAt: new Date(),
+  }));
+  await assertSucceeds(runTransaction(manager, async (tx) => {
+    tx.update(doc(manager, 'assets', 'asset-1'), { status: 'available' });
+    tx.update(doc(manager, 'maintenance_records', 'maintenance-completion'), {
+      status: 'completed', resolution: 'Repaired', cost: 10, completedAt: new Date(),
+    });
+  }));
+});
+
 test('maintenance and purchases are isolated by linked asset office', async () => {
   const a = env.authenticatedContext('manager-1').firestore();
   const b = env.authenticatedContext('manager-b').firestore();
