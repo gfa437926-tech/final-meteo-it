@@ -1301,3 +1301,165 @@ test('FIFO allocations consume legacy stock first and then the oldest supplier l
   await assertFails(getDoc(doc(managerB, 'spare_part_allocations', 'fifo-usage-1')));
   await assertFails(getDoc(doc(managerB, 'spare_part_lots', 'fifo-lot-1')));
 });
+
+test('immutable FIFO usage and allocation documents cannot be replayed to consume stock twice', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await updateDoc(doc(db, 'assets', 'asset-1'), { status: 'maintenance' });
+    await setDoc(doc(db, 'maintenance_records', 'replay-ticket'), {
+      assetId: 'asset-1', officeId: 'office-a', title: 'Replay protection',
+      status: 'open', partsCost: 0, reportedAt: new Date(),
+    });
+    await setDoc(doc(db, 'spare_parts', 'replay-part'), {
+      officeId: 'office-a', name: 'SSD', sku: 'SSD-REPLAY',
+      quantity: 10, untrackedQuantity: 0, minimumQuantity: 1,
+      unitCost: 10, supplier: 'Replay Supplier',
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const now = new Date();
+    await setDoc(doc(db, 'spare_part_receipts', 'replay-receipt'), {
+      partId: 'replay-part', officeId: 'office-a', lotId: 'replay-lot',
+      quantity: 10, quantityBefore: 0, quantityAfter: 10,
+      unitCost: 10, totalCost: 100, supplier: 'Replay Supplier',
+      notes: '', receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    await setDoc(doc(db, 'spare_part_lots', 'replay-lot'), {
+      partId: 'replay-part', officeId: 'office-a',
+      receiptId: 'replay-receipt', supplier: 'Replay Supplier',
+      receivedQuantity: 10, unitCost: 10, totalCost: 100,
+      receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    await setDoc(doc(db, 'spare_part_lot_balances', 'replay-lot'), {
+      lotId: 'replay-lot', partId: 'replay-part', officeId: 'office-a',
+      remainingQuantity: 10, createdAt: now, updatedAt: now,
+      lastAllocationId: null,
+    });
+  });
+
+  const issue = async (usageId, quantity) => assertSucceeds(runTransaction(manager, async (tx) => {
+    const partRef = doc(manager, 'spare_parts', 'replay-part');
+    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
+    const balanceRef = doc(manager, 'spare_part_lot_balances', 'replay-lot');
+    const usageRef = doc(manager, 'maintenance_parts', usageId);
+    const allocationRef = doc(manager, 'spare_part_allocations', usageId);
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    const balance = await tx.get(balanceRef);
+    const totalCost = quantity * 10;
+    const now = new Date();
+    tx.update(partRef, {
+      quantity: part.data().quantity - quantity,
+      untrackedQuantity: 0,
+      lastUsageId: usageId,
+      updatedAt: now,
+    });
+    tx.update(ticketRef, {
+      partsCost: ticket.data().partsCost + totalCost,
+      lastPartsUsageId: usageId,
+      updatedAt: now,
+    });
+    tx.update(balanceRef, {
+      remainingQuantity: balance.data().remainingQuantity - quantity,
+      updatedAt: now,
+      lastAllocationId: usageId,
+    });
+    tx.set(usageRef, {
+      partId: 'replay-part', partName: 'SSD',
+      maintenanceId: 'replay-ticket', assetId: 'asset-1',
+      officeId: 'office-a', quantity, unitCost: 10, totalCost,
+      notes: '', usedAt: now, createdBy: 'manager-1',
+      allocationId: usageId, allocationCount: 1,
+      legacyQuantity: 0, costAttributionComplete: true,
+    });
+    tx.set(allocationRef, {
+      usageId, partId: 'replay-part', officeId: 'office-a',
+      maintenanceId: 'replay-ticket', assetId: 'asset-1',
+      quantity, totalCost,
+      lines: [{
+        sourceType: 'lot', lotId: 'replay-lot', receiptId: 'replay-receipt',
+        supplier: 'Replay Supplier', quantity, unitCost: 10, totalCost,
+      }],
+      createdAt: now, createdBy: 'manager-1',
+    });
+  }));
+
+  await issue('replay-usage-1', 2);
+  await issue('replay-usage-2', 1);
+
+  // Reusing an old allocation to decrement its lot balance again is denied.
+  await assertFails(updateDoc(doc(manager, 'spare_part_lot_balances', 'replay-lot'), {
+    remainingQuantity: 5, updatedAt: new Date(),
+    lastAllocationId: 'replay-usage-1',
+  }));
+
+  // Replaying the old usage against stock, ticket cost and lot balance is also denied.
+  await assertFails(runTransaction(manager, async (tx) => {
+    const partRef = doc(manager, 'spare_parts', 'replay-part');
+    const ticketRef = doc(manager, 'maintenance_records', 'replay-ticket');
+    const balanceRef = doc(manager, 'spare_part_lot_balances', 'replay-lot');
+    const part = await tx.get(partRef);
+    const ticket = await tx.get(ticketRef);
+    const balance = await tx.get(balanceRef);
+    tx.update(partRef, {
+      quantity: part.data().quantity - 2,
+      untrackedQuantity: 0,
+      lastUsageId: 'replay-usage-1',
+      updatedAt: new Date(),
+    });
+    tx.update(ticketRef, {
+      partsCost: ticket.data().partsCost + 20,
+      lastPartsUsageId: 'replay-usage-1',
+      updatedAt: new Date(),
+    });
+    tx.update(balanceRef, {
+      remainingQuantity: balance.data().remainingQuantity - 2,
+      updatedAt: new Date(),
+      lastAllocationId: 'replay-usage-1',
+    });
+  }));
+});
+
+test('an immutable receipt cannot be replayed to increase stock a second time', async () => {
+  const manager = env.authenticatedContext('manager-1').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const now = new Date();
+    // Ten legacy units plus a five-unit receipt. Five legacy units were then
+    // consumed, leaving quantity=10, untracked=5 and the lot balance untouched.
+    await setDoc(doc(db, 'spare_parts', 'receipt-replay-part'), {
+      officeId: 'office-a', name: 'RAM', sku: 'RAM-REPLAY',
+      quantity: 10, untrackedQuantity: 5, minimumQuantity: 1,
+      unitCost: 12, supplier: 'Receipt Replay Supplier',
+      lastRestockId: 'receipt-replay-id',
+      createdAt: now, updatedAt: now,
+    });
+    await setDoc(doc(db, 'spare_part_receipts', 'receipt-replay-id'), {
+      partId: 'receipt-replay-part', officeId: 'office-a',
+      lotId: 'receipt-replay-id', quantity: 5,
+      quantityBefore: 10, quantityAfter: 15,
+      unitCost: 12, totalCost: 60, supplier: 'Receipt Replay Supplier',
+      notes: '', receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    await setDoc(doc(db, 'spare_part_lots', 'receipt-replay-id'), {
+      partId: 'receipt-replay-part', officeId: 'office-a',
+      receiptId: 'receipt-replay-id', supplier: 'Receipt Replay Supplier',
+      receivedQuantity: 5, unitCost: 12, totalCost: 60,
+      receivedAt: now, createdAt: now, createdBy: 'manager-1',
+    });
+    await setDoc(doc(db, 'spare_part_lot_balances', 'receipt-replay-id'), {
+      lotId: 'receipt-replay-id', partId: 'receipt-replay-part',
+      officeId: 'office-a', remainingQuantity: 5,
+      createdAt: now, updatedAt: now, lastAllocationId: null,
+    });
+  });
+
+  await assertFails(updateDoc(doc(manager, 'spare_parts', 'receipt-replay-part'), {
+    quantity: 15,
+    untrackedQuantity: 5,
+    unitCost: 12,
+    supplier: 'Receipt Replay Supplier',
+    lastRestockId: 'receipt-replay-id',
+    updatedAt: new Date(),
+  }));
+});
