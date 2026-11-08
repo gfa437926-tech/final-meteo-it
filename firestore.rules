@@ -267,8 +267,7 @@ service cloud.firestore {
         (purchaseId is string &&
          exists(/databases/$(database)/documents/purchase_records/$(purchaseId)) &&
          get(/databases/$(database)/documents/purchase_records/$(purchaseId)).data.assetId == data.assetId &&
-         get(/databases/$(database)/documents/purchase_records/$(purchaseId)).data.officeId == data.officeId &&
-         linkedAssetOffice(data.assetId, data.officeId));
+         get(/databases/$(database)/documents/purchase_records/$(purchaseId)).data.officeId == data.officeId);
     }
 
     match /asset_documents/{documentId} {
