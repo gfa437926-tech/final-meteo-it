@@ -547,7 +547,9 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
               if (lines is! List) continue;
               for (final line in lines) {
                 if (line is! Map || line['sourceType'] != 'lot' ||
-                    line['supplier'] is! String) continue;
+                    line['supplier'] is! String) {
+                  continue;
+                }
                 final name = line['supplier'] as String;
                 supplierIssueTotals.putIfAbsent(name, () => <Map<String, dynamic>>[]).add({
                   ...event,
