@@ -11,23 +11,51 @@ class MaintenanceRepository {
   CollectionReference<Map<String, dynamic>> get records =>
       db.collection('maintenance_records');
 
+  Future<List<String>> _activeAssignedOfficeIds(List<String> officeIds) async {
+    if (officeIds.isEmpty) return const <String>[];
+    final snapshot = await db
+        .collection('offices')
+        .where(FieldPath.documentId, whereIn: officeIds)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map((document) => document.id).toList();
+  }
+
   Stream<List<MaintenanceRecord>> watch() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return Stream.value(const <MaintenanceRecord>[]);
     return db.collection('users').doc(uid).snapshots().asyncExpand((profile) {
       final data = profile.data() ?? const <String, dynamic>{};
-      if (data['isActive'] != true) return Stream.value(const <MaintenanceRecord>[]);
-      Query<Map<String, dynamic>> query = records;
-      if (data['role'] != 'admin') {
-        final ids = data['officeIds'];
-        final officeIds = ids is List ? ids.whereType<String>().toList() : <String>[];
-        if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+      if (data['isActive'] != true) {
+        return Stream.value(const <MaintenanceRecord>[]);
+      }
+      if (data['role'] == 'admin') {
+        return records.orderBy('reportedAt', descending: true)
+            .snapshots()
+            .map((snapshot) => snapshot.docs
+                .map((doc) => MaintenanceRecord.fromMap(doc.id, doc.data()))
+                .toList());
+      }
+      final raw = data['officeIds'];
+      final officeIds = raw is List
+          ? raw.whereType<String>().toSet().toList()
+          : <String>[];
+      if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+        return Stream.value(const <MaintenanceRecord>[]);
+      }
+      return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+          .asyncExpand((activeOfficeIds) {
+        if (activeOfficeIds.isEmpty) {
           return Stream.value(const <MaintenanceRecord>[]);
         }
-        query = query.where('officeId', whereIn: officeIds);
-      }
-      return query.orderBy('reportedAt', descending: true).snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => MaintenanceRecord.fromMap(doc.id, doc.data())).toList());
+        return records
+            .where('officeId', whereIn: activeOfficeIds)
+            .orderBy('reportedAt', descending: true)
+            .snapshots()
+            .map((snapshot) => snapshot.docs
+                .map((doc) => MaintenanceRecord.fromMap(doc.id, doc.data()))
+                .toList());
+      });
     });
   }
 
