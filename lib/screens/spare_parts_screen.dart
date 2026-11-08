@@ -117,7 +117,11 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     String? maintenanceId;
     final tickets = await repository.watchOpenTickets().first;
     if (!mounted) return;
-    if (tickets.docs.isEmpty) {
+    final openTickets = tickets.docs.where((ticket) {
+      final status = ticket.data()['status'] as String? ?? '';
+      return status == 'open' || status == 'inProgress';
+    }).toList();
+    if (openTickets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('لا توجد طلبات صيانة مفتوحة لصرف القطع عليها')),
       );
@@ -137,7 +141,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'طلب الصيانة'),
-                  items: tickets.docs.map((ticket) {
+                  items: openTickets.map((ticket) {
                     final data = ticket.data();
                     return DropdownMenuItem(
                       value: ticket.id,
