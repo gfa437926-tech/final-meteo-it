@@ -343,13 +343,17 @@ service cloud.firestore {
         ? lines[index].quantity : 0;
     }
     function validAllocationLine(lines, index, usageId, usage) {
-      let line = lines[index];
+      return lines.size() <= index ||
+        validAllocationLineValue(lines[index], usageId, usage);
+    }
+    function validAllocationLineValue(line, usageId, usage) {
+      return line is map && validAllocationLineMap(line, usageId, usage);
+    }
+    function validAllocationLineMap(line, usageId, usage) {
       let lotPath = /databases/$(database)/documents/spare_part_lots/$(line.lotId);
       let balancePath = /databases/$(database)/documents/spare_part_lot_balances/$(line.lotId);
       let receiptPath = /databases/$(database)/documents/spare_part_receipts/$(line.receiptId);
-      return lines.size() <= index ||
-        (line is map &&
-         line.keys().hasOnly([
+      return line.keys().hasOnly([
            'sourceType', 'lotId', 'receiptId', 'supplier',
            'quantity', 'unitCost', 'totalCost'
          ]) &&
