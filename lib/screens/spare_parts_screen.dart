@@ -292,6 +292,40 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
 
 
+  List<Map<String, dynamic>> _filterMovementEvents(
+    List<Map<String, dynamic>> events, {
+    required String? selectedOffice,
+    required String? selectedSupplier,
+  }) {
+    final result = <Map<String, dynamic>>[];
+    for (final event in events) {
+      if (selectedOffice != null && event['officeId'] != selectedOffice) continue;
+      if (selectedSupplier == null) {
+        result.add(event);
+        continue;
+      }
+      if (event['isIncoming'] == true) {
+        if (event['supplier'] == selectedSupplier) result.add(event);
+        continue;
+      }
+      final rawLines = event['allocationLines'];
+      if (rawLines is! List) continue;
+      for (final rawLine in rawLines) {
+        if (rawLine is! Map || rawLine['sourceType'] != 'lot' ||
+            rawLine['supplier'] != selectedSupplier) continue;
+        result.add({
+          ...event,
+          'quantity': (rawLine['quantity'] as num?)?.toInt() ?? 0,
+          'unitCost': (rawLine['unitCost'] as num?)?.toDouble() ?? 0,
+          'totalCost': (rawLine['totalCost'] as num?)?.toDouble() ?? 0,
+          'supplier': rawLine['supplier'],
+          'allocationLine': true,
+        });
+      }
+    }
+    return result;
+  }
+
   Future<void> _exportMovementReport({
     required List<Map<String, dynamic>> events,
     required Map<String, String> officeNames,
@@ -300,16 +334,11 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
     required DateTime start,
     required DateTime endExclusive,
   }) async {
-    final filtered = events.where((event) {
-      if (selectedOffice != null && event['officeId'] != selectedOffice) {
-        return false;
-      }
-      if (event['isIncoming'] == true && selectedSupplier != null &&
-          event['supplier'] != selectedSupplier) {
-        return false;
-      }
-      return true;
-    }).toList();
+    final filtered = _filterMovementEvents(
+      events,
+      selectedOffice: selectedOffice,
+      selectedSupplier: selectedSupplier,
+    );
 
     final workbook = Excel.createExcel();
     final sheet = workbook['حركة المخزون'];
@@ -423,9 +452,24 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
       );
       if (!mounted) return;
       final officeNames = {for (final office in offices) office.id: office.name};
-      final suppliers = events.where((e) => e['isIncoming'] == true)
-          .map((e) => e['supplier'] as String? ?? '')
-          .where((s) => s.isNotEmpty).toSet().toList()..sort();
+      final supplierNames = <String>{};
+      for (final event in events) {
+        if (event['isIncoming'] == true) {
+          final supplier = event['supplier'] as String? ?? '';
+          if (supplier.isNotEmpty) supplierNames.add(supplier);
+        } else {
+          final lines = event['allocationLines'];
+          if (lines is List) {
+            for (final line in lines) {
+              if (line is Map && line['sourceType'] == 'lot' &&
+                  line['supplier'] is String && (line['supplier'] as String).isNotEmpty) {
+                supplierNames.add(line['supplier'] as String);
+              }
+            }
+          }
+        }
+      }
+      final suppliers = supplierNames.toList()..sort();
       String? selectedOffice;
       String? selectedSupplier;
 
@@ -435,19 +479,20 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
           builder: (ctx, setDialog) {
             final officeEvents = events.where((e) =>
               selectedOffice == null || e['officeId'] == selectedOffice).toList();
-            final incoming = officeEvents.where((e) =>
-              e['isIncoming'] == true &&
-              (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
-            final outgoing = officeEvents.where((e) => e['isIncoming'] == false).toList();
+            final filteredEvents = _filterMovementEvents(
+              events,
+              selectedOffice: selectedOffice,
+              selectedSupplier: selectedSupplier,
+            );
+            final incoming = filteredEvents.where((e) => e['isIncoming'] == true).toList();
+            final outgoing = filteredEvents.where((e) => e['isIncoming'] == false).toList();
             int quantityOf(List<Map<String, dynamic>> rows) =>
                 rows.fold<int>(0, (total, row) => total + (row['quantity'] as int));
             double costOf(List<Map<String, dynamic>> rows) =>
                 rows.fold<double>(0, (total, row) => total + (row['totalCost'] as double));
-            final officeIds = officeEvents.map((e) => e['officeId'] as String? ?? '')
+            final officeIds = filteredEvents.map((e) => e['officeId'] as String? ?? '')
                 .where((id) => id.isNotEmpty).toSet().toList()..sort();
-            final periodEvents = officeEvents.where((event) =>
-              event['isIncoming'] != true || selectedSupplier == null ||
-              event['supplier'] == selectedSupplier).toList();
+            final periodEvents = filteredEvents;
             final periodGroups = <String, List<Map<String, dynamic>>>{};
             for (final event in periodEvents) {
               final date = event['eventAt'] as DateTime;
@@ -464,9 +509,24 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
             final sortedAnnual = annualGroups.entries.toList()
               ..sort((a, b) => a.key.compareTo(b.key));
             final supplierTotals = <String, List<Map<String, dynamic>>>{};
+            final supplierIssueTotals = <String, List<Map<String, dynamic>>>{};
             for (final event in officeEvents.where((e) => e['isIncoming'] == true)) {
               final name = event['supplier'] as String? ?? 'غير محدد';
               supplierTotals.putIfAbsent(name, () => <Map<String, dynamic>>[]).add(event);
+            }
+            for (final event in officeEvents.where((e) => e['isIncoming'] == false)) {
+              final lines = event['allocationLines'];
+              if (lines is! List) continue;
+              for (final line in lines) {
+                if (line is! Map || line['sourceType'] != 'lot' ||
+                    line['supplier'] is! String) continue;
+                final name = line['supplier'] as String;
+                supplierIssueTotals.putIfAbsent(name, () => <Map<String, dynamic>>[]).add({
+                  ...event,
+                  'quantity': (line['quantity'] as num?)?.toInt() ?? 0,
+                  'totalCost': (line['totalCost'] as num?)?.toDouble() ?? 0,
+                });
+              }
             }
             return AlertDialog(
               title: const Text('تقرير مقارنة التوريد والصرف'),
@@ -493,7 +553,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: selectedSupplier,
-                        decoration: const InputDecoration(labelText: 'المورد (يطبق على الوارد فقط)'),
+                        decoration: const InputDecoration(labelText: 'المورد (الوارد والصرف المتتبع)'),
                         items: [
                           const DropdownMenuItem<String>(value: null, child: Text('جميع الموردين')),
                           ...suppliers.map((supplier) => DropdownMenuItem(
@@ -518,7 +578,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         )
                       else
                         ...officeIds.map((id) {
-                          final rows = officeEvents.where((e) => e['officeId'] == id).toList();
+                          final rows = filteredEvents.where((e) => e['officeId'] == id).toList();
                           final receivedRows = rows.where((e) =>
                             e['isIncoming'] == true &&
                             (selectedSupplier == null || e['supplier'] == selectedSupplier)).toList();
@@ -585,7 +645,23 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             trailing: Text('${quantityOf(entry.value)} وحدة • ${costOf(entry.value).toStringAsFixed(2)}'),
                           )),
                       const SizedBox(height: 8),
-                      const Text('ملاحظة: المورد مرتبط بإيصال التوريد فقط. حركات الصرف تُقارن على مستوى المكتب والفترة؛ لا تُنسب إلى مورد محدد لعدم وجود تتبع دفعات/تشغيلات في نموذج الصرف الحالي.',
+                      const Divider(height: 24),
+                      const Text('الصرف حسب المورد الفعلي', style: TextStyle(fontWeight: FontWeight.bold)),
+                      if (supplierIssueTotals.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('لا توجد حركات صرف منسوبة إلى دفعات موردين ضمن الفترة.'),
+                        )
+                      else
+                        ...supplierIssueTotals.entries.where((entry) =>
+                          selectedSupplier == null || entry.key == selectedSupplier).map((entry) =>
+                          ListTile(
+                            dense: true,
+                            title: Text(entry.key),
+                            trailing: Text('${quantityOf(entry.value)} وحدة • ${costOf(entry.value).toStringAsFixed(2)}'),
+                          )),
+                      const SizedBox(height: 8),
+                      const Text('الرصيد التاريخي غير المنسوب يظهر دون مورد أو تكلفة مفترضة، وتكون نسبة التكلفة مكتملة فقط عندما تأتي الكمية المصروفة بالكامل من دفعات موثقة.',
                           style: TextStyle(fontSize: 12)),
                       const SizedBox(height: 8),
                       const Text('التقرير للقراءة فقط، ويُبنى من إيصالات التوريد وسجلات الصرف الأصلية غير القابلة للتعديل أو الحذف.',
