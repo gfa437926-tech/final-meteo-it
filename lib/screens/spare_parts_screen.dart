@@ -327,10 +327,10 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
           }
           return dateOf(b).compareTo(dateOf(a));
         });
-      final received = receipts.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
-      final consumed = issues.fold<int>(0, (sum, row) => sum + (row['quantity'] as int));
-      final receivedCost = receipts.fold<double>(0, (sum, row) => sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
-      final issuedCost = issues.fold<double>(0, (sum, row) => sum + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+      final received = receipts.fold<int>(0, (total, row) => total + (row['quantity'] as int));
+      final consumed = issues.fold<int>(0, (total, row) => total + (row['quantity'] as int));
+      final receivedCost = receipts.fold<double>(0, (total, row) => total + ((row['totalCost'] as num?)?.toDouble() ?? 0));
+      final issuedCost = issues.fold<double>(0, (total, row) => total + ((row['totalCost'] as num?)?.toDouble() ?? 0));
       final closing = (data['quantity'] as num?)?.toInt() ?? 0;
       final opening = closing - received + consumed;
       final suppliers = receipts.map((row) => row['supplier'] as String? ?? '')
