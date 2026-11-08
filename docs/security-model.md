@@ -142,3 +142,10 @@ Until all six values are configured, the deployed site intentionally shows a Fir
 ### FIFO enforcement boundary
 
 The Flutter repository selects lots in FIFO order by `receivedAt` then `createdAt`. Firestore rules validate the new usage/allocation bundle, office and actor links, exact lot-cost metadata, matching balance decrements, immutable records, and replay prevention. Firestore Security Rules cannot query all open lot balances to prove that a client-selected lot is globally the oldest available lot. Therefore, the current client workflow provides FIFO selection for the supported application but is not a tamper-proof FIFO authority against a modified client. Before treating supplier FIFO ordering as a production security guarantee, route consumption through a trusted server-side transaction (for example, an authenticated callable function or the approved backend) and deny direct client writes to the stock/allocation transaction collections. No such server-side service is deployed by this branch.
+
+
+### FIFO enforcement boundary
+
+The callable `consumeSparePart` function is the only client-facing write path for consumption. It derives the actor from Firebase Authentication, validates the active profile and office assignment, queries the lot catalogue in FIFO order inside the same Firestore transaction, verifies each lot against its immutable receipt and balance, and atomically updates stock, maintenance cost, lot balances, usage and allocation records. The shared `spare_parts` document serializes consumption with concurrent restocks and other consumption transactions.
+
+Firestore Rules deny client writes to consumption records, allocation records and lot balances, and deny direct stock/maintenance-cost consumption updates. The function uses the Admin SDK and is not deployed by CI. Before production use, deploy it only to the dedicated inventory Firebase project, verify its region and IAM/runtime configuration, enable App Check enforcement after client attestation is configured, and test callable authorization end-to-end.
