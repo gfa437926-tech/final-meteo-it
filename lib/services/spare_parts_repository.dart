@@ -1,24 +1,87 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SparePartsRepository {
-  SparePartsRepository({FirebaseFirestore? firestore})
-      : db = firestore ?? FirebaseFirestore.instance;
+  SparePartsRepository({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  })  : db = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore db;
+  final FirebaseAuth _auth;
 
   CollectionReference<Map<String, dynamic>> get parts =>
       db.collection('spare_parts');
 
+  CollectionReference<Map<String, dynamic>> get _tickets =>
+      db.collection('maintenance_records');
+
+  /// null means global administrator; an empty list means no active office.
+  Stream<List<String>?> _activeOfficeScope() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return Stream.value(const <String>[]);
+    return db.collection('users').doc(uid).snapshots().asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) return Stream.value(const <String>[]);
+      if (data['role'] == 'admin') return Stream.value(null);
+      final raw = data['officeIds'];
+      final assigned = raw is List
+          ? raw.whereType<String>().toSet().toList()
+          : <String>[];
+      if (data['role'] != 'it_manager' || assigned.isEmpty) {
+        return Stream.value(const <String>[]);
+      }
+      return db.collection('offices')
+          .where(FieldPath.documentId, whereIn: assigned)
+          .where('isActive', isEqualTo: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => doc.id).toList());
+    });
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> watchParts() =>
-      parts.orderBy('name').snapshots();
+      _activeOfficeScope().asyncExpand((officeIds) {
+        if (officeIds == null) return parts.orderBy('name').snapshots();
+        if (officeIds.isEmpty) {
+          return parts.where('officeId', isEqualTo: '__no_active_office__')
+              .snapshots();
+        }
+        return parts.where('officeId', whereIn: officeIds)
+            .orderBy('name').snapshots();
+      });
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchOpenTickets() =>
-      db.collection('maintenance_records')
-          .where('status', whereIn: ['open', 'inProgress'])
-          .snapshots();
+      _activeOfficeScope().asyncExpand((officeIds) {
+        Query<Map<String, dynamic>> query = _tickets
+            .where('status', whereIn: ['open', 'inProgress']);
+        if (officeIds == null) return query.snapshots();
+        if (officeIds.isEmpty) {
+          return query.where('officeId', isEqualTo: '__no_active_office__')
+              .snapshots();
+        }
+        return query.where('officeId', whereIn: officeIds).snapshots();
+      });
+
+  Future<void> _assertOfficeAssignment(String officeId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
+    final profile = await db.collection('users').doc(uid).get();
+    final user = profile.data() ?? const <String, dynamic>{};
+    final office = await db.collection('offices').doc(officeId).get();
+    if (user['isActive'] != true || !office.exists ||
+        office.data()?['isActive'] != true) {
+      throw StateError('المكتب غير نشط أو غير متاح');
+    }
+    final allowed = user['role'] == 'admin' ||
+        (user['role'] == 'it_manager' &&
+         (user['officeIds'] as List?)?.contains(officeId) == true);
+    if (!allowed) throw StateError('لا تملك صلاحية إدارة مخزون هذا المكتب');
+  }
 
   Future<void> addPart({
     required String id,
+    required String officeId,
     required String name,
     required String sku,
     required int quantity,
@@ -28,20 +91,24 @@ class SparePartsRepository {
   }) async {
     final cleanName = name.trim();
     final cleanSku = sku.trim().toUpperCase();
-    if (cleanName.isEmpty || cleanSku.isEmpty || quantity < 0 ||
-        minimumQuantity < 0 || !unitCost.isFinite || unitCost < 0) {
-      throw ArgumentError('تحقق من اسم القطعة ورمزها والكميات والتكلفة');
+    if (officeId.trim().isEmpty || cleanName.isEmpty || cleanSku.isEmpty ||
+        quantity < 0 || minimumQuantity < 0 ||
+        !unitCost.isFinite || unitCost < 0) {
+      throw ArgumentError('تحقق من المكتب واسم القطعة ورمزها والكميات والتكلفة');
     }
+    await _assertOfficeAssignment(officeId);
     final ref = parts.doc(id);
     await db.runTransaction((transaction) async {
       final existing = await transaction.get(ref);
       if (existing.exists) throw StateError('معرّف القطعة مستخدم مسبقاً');
       transaction.set(ref, {
+        'officeId': officeId,
         'name': cleanName,
         'sku': cleanSku,
         'quantity': quantity,
         'minimumQuantity': minimumQuantity,
         'unitCost': unitCost,
+        'minimumQuantity': minimumQuantity,
         'supplier': supplier.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -57,44 +124,79 @@ class SparePartsRepository {
   }) async {
     if (quantity <= 0) throw ArgumentError('الكمية يجب أن تكون أكبر من صفر');
     final partRef = parts.doc(partId);
-    final ticketRef = db.collection('maintenance_records').doc(maintenanceId);
+    final ticketRef = _tickets.doc(maintenanceId);
     final usageRef = db.collection('maintenance_parts').doc();
+    final assetCollection = db.collection('assets');
+
     await db.runTransaction((transaction) async {
       final partSnapshot = await transaction.get(partRef);
       final ticketSnapshot = await transaction.get(ticketRef);
       if (!partSnapshot.exists) throw StateError('قطعة الغيار غير موجودة');
       if (!ticketSnapshot.exists) throw StateError('طلب الصيانة غير موجود');
+
       final part = partSnapshot.data()!;
       final ticket = ticketSnapshot.data()!;
       final status = ticket['status'] as String? ?? '';
       if (status != 'open' && status != 'inProgress') {
         throw StateError('لا يمكن صرف قطع غيار لطلب صيانة مغلق');
       }
+
+      final assetId = ticket['assetId'] as String? ?? '';
+      final officeId = ticket['officeId'] as String? ?? '';
+      if (assetId.isEmpty || officeId.isEmpty) {
+        throw StateError('طلب الصيانة غير مرتبط بأصل ومكتب صالحين');
+      }
+      final assetRef = assetCollection.doc(assetId);
+      final assetSnapshot = await transaction.get(assetRef);
+      final officeRef = db.collection('offices').doc(officeId);
+      final officeSnapshot = await transaction.get(officeRef);
+      if (!assetSnapshot.exists || !officeSnapshot.exists ||
+          officeSnapshot.data()?['isActive'] != true) {
+        throw StateError('الأصل أو المكتب غير موجود أو غير نشط');
+      }
+      if (assetSnapshot.data()?['officeId'] != officeId ||
+          part['officeId'] != officeId) {
+        throw StateError('يجب أن تتطابق مكاتب القطعة وطلب الصيانة والأصل');
+      }
+      if (assetSnapshot.data()?['status'] != 'maintenance') {
+        throw StateError('الأصل المرتبط ليس في حالة صيانة');
+      }
+
       final available = (part['quantity'] as num?)?.toInt() ?? 0;
       if (available < quantity) throw StateError('الكمية المتاحة غير كافية');
       final unitCost = (part['unitCost'] as num?)?.toDouble() ?? 0;
-      final partName = part['name'] as String? ?? '';
-      final ticketAssetId = ticket['assetId'] as String? ?? '';
-      if (ticketAssetId.isEmpty) throw StateError('طلب الصيانة غير مرتبط بأصل');
+      if (!unitCost.isFinite || unitCost < 0) {
+        throw StateError('تكلفة القطعة المخزنة غير صالحة');
+      }
+      final totalCost = unitCost * quantity;
+      final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
+      if (!previousPartsCost.isFinite || previousPartsCost < 0) {
+        throw StateError('تكلفة القطع السابقة غير صالحة');
+      }
+      final usageId = usageRef.id;
+      final now = FieldValue.serverTimestamp();
+
       transaction.update(partRef, {
         'quantity': available - quantity,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'lastUsageId': usageId,
+        'updatedAt': now,
       });
-      final previousPartsCost = (ticket['partsCost'] as num?)?.toDouble() ?? 0;
       transaction.update(ticketRef, {
-        'partsCost': previousPartsCost + unitCost * quantity,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'partsCost': previousPartsCost + totalCost,
+        'lastPartsUsageId': usageId,
+        'updatedAt': now,
       });
       transaction.set(usageRef, {
         'partId': partId,
-        'partName': partName,
+        'partName': part['name'] as String? ?? '',
         'maintenanceId': maintenanceId,
-        'assetId': ticketAssetId,
+        'assetId': assetId,
+        'officeId': officeId,
         'quantity': quantity,
         'unitCost': unitCost,
-        'totalCost': unitCost * quantity,
+        'totalCost': totalCost,
         'notes': notes.trim(),
-        'usedAt': FieldValue.serverTimestamp(),
+        'usedAt': now,
       });
     });
   }
