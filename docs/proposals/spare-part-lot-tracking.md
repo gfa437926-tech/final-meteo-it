@@ -28,20 +28,17 @@
 
 هذا مستند تشغيلي قابل للتغيير فقط داخل معاملة توريد/صرف صحيحة، ولا يقبل الكتابة المستقلة من العميل. لا يحمل معلومات مالية بديلة عن الدفعة الأصلية.
 
-### `spare_part_allocations/{allocationId}` — توزيع حركة الصرف على الدفعات
+### `spare_part_allocations/{usageId}` — تخصيص حركة الصرف
 
-- `usageId` — معرف سجل `maintenance_parts`
-- `partId`, `officeId`, `maintenanceId`, `assetId`
-- `sourceType`: `lot` أو `legacy_untracked`
-- `lotId?`, `receiptId?`, `supplier?`
-- `quantity`, `unitCost?`, `totalCost?`
-- `allocatedAt`, `createdAt`, `createdBy`
+- الحقول العليا: `usageId`, `partId`, `officeId`, `maintenanceId`, `assetId`, `quantity`, `totalCost`, `createdAt`, `createdBy`.
+- `lines[]`: كل سطر يحمل `sourceType`, `lotId?`, `receiptId?`, `supplier?`, `quantity`, `unitCost?`, `totalCost?`.
+- معرف مستند التخصيص هو نفسه معرف حركة `maintenance_parts`.
 
 سجل append-only واحد لكل حركة صرف، ويحمل `lines[]` لتقسيم الكمية على الرصيد التاريخي والدفعات. يترك سطر `legacy_untracked` المورد والتكلفة فارغين؛ لا تُخترع له تكلفة أو جهة توريد. الحد الأقصى خمسة أسطر لكل حركة بسبب ميزانية قراءات قواعد Firestore، وتُقسّم الحركات الأكبر إلى عمليات صرف أصغر.
 
 ### الرصيد التاريخي غير المنسوب
 
-يحمل `spare_parts.untrackedQuantity` كمية الرصيد غير المرتبط بإيصال موثوق. القطع الجديدة تبدأ بهذه الكمية؛ والقطع التاريخية التي لا تحمل الحقل تُعامل افتراضياً على أن كامل رصيدها غير منسوب. لا تنشأ لها دفعة وهمية ولا مورد افتراضي، وينخفض هذا الرصيد عند استهلاكه.
+يحمل `spare_parts.untrackedQuantity` كمية الرصيد غير المرتبط بإيصال موثوق. وتسجل حركة الصرف في `maintenance_parts` الحقول `allocationId`, `allocationCount`, `legacyQuantity`, `costAttributionComplete`. القطع الجديدة تبدأ بهذه الكمية؛ والقطع التاريخية التي لا تحمل الحقل تُعامل افتراضياً على أن كامل رصيدها غير منسوب. لا تنشأ لها دفعة وهمية ولا مورد افتراضي، وينخفض هذا الرصيد عند استهلاكه.
 
 ## 3. قواعد التخصيص FIFO
 
