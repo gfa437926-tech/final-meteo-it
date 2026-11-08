@@ -887,7 +887,7 @@ test('spare part consumption requires one atomic stock, maintenance cost and usa
     partId: 'parts-part-a', partName: 'SSD',
     maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
     officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
-    notes: '', usedAt: new Date(),
+    notes: '', usedAt: new Date(), createdBy: 'manager-1',
   }));
 
   await assertSucceeds(runTransaction(manager, async (tx) => {
@@ -911,7 +911,7 @@ test('spare part consumption requires one atomic stock, maintenance cost and usa
       partId: 'parts-part-a', partName: 'SSD',
       maintenanceId: 'parts-maintenance-a', assetId: 'asset-1',
       officeId: 'office-a', quantity: 2, unitCost: 5, totalCost: 10,
-      notes: 'Replacement', usedAt: new Date(),
+      notes: 'Replacement', usedAt: new Date(), createdBy: 'manager-1',
     });
   }));
 
@@ -956,7 +956,7 @@ test('spare usage cannot connect a part, maintenance ticket and asset across off
       partId: 'parts-part-b', partName: 'RAM',
       maintenanceId: 'parts-maintenance-b', assetId: 'asset-b',
       officeId: 'office-b', quantity: 1, unitCost: 3, totalCost: 3,
-      notes: '', usedAt: new Date(),
+      notes: '', usedAt: new Date(), createdBy: 'manager-1',
     });
   }));
 });
@@ -1079,4 +1079,21 @@ test('restocking cannot alter weighted cost or supplier independently of its rec
   await assertFails(updateDoc(doc(manager, 'spare_parts', 'restock-tamper'), {
     supplier: 'Forged Supplier', updatedAt: new Date(),
   }));
+});
+
+
+test('spare part movement reads are office-scoped and usage events are immutable and actor-bound', async () => {
+  const managerA = env.authenticatedContext('manager-1').firestore();
+  const managerB = env.authenticatedContext('manager-b').firestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'maintenance_records', 'history-ticket-a'), { assetId: 'asset-1', officeId: 'office-a', status: 'open' });
+    await setDoc(doc(db, 'maintenance_parts', 'history-use-a'), { partId: 'history-part-a', partName: 'SSD', maintenanceId: 'history-ticket-a', assetId: 'asset-1', officeId: 'office-a', quantity: 2, unitCost: 10, totalCost: 20, notes: '', usedAt: new Date(), createdBy: 'manager-1' });
+    await setDoc(doc(db, 'maintenance_records', 'history-ticket-b'), { assetId: 'asset-b', officeId: 'office-b', status: 'open' });
+    await setDoc(doc(db, 'maintenance_parts', 'history-use-b'), { partId: 'history-part-b', partName: 'RAM', maintenanceId: 'history-ticket-b', assetId: 'asset-b', officeId: 'office-b', quantity: 1, unitCost: 5, totalCost: 5, notes: '', usedAt: new Date(), createdBy: 'manager-b' });
+  });
+  await assertSucceeds(getDocs(query(collection(managerA, 'maintenance_parts'), where('partId', '==', 'history-part-a'), where('officeId', '==', 'office-a'))));
+  await assertFails(getDocs(query(collection(managerA, 'maintenance_parts'), where('partId', '==', 'history-part-b'), where('officeId', '==', 'office-b'))));
+  await assertFails(updateDoc(doc(managerA, 'maintenance_parts', 'history-use-a'), { quantity: 200 }));
+  await assertFails(deleteDoc(doc(managerA, 'maintenance_parts', 'history-use-a')));
 });
