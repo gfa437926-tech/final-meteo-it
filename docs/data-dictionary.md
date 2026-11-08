@@ -71,7 +71,7 @@ Movement records are visible only to the global administrator or managers assign
 
 ## maintenance_parts/{usageId}
 
-Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `officeId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`, `createdBy`, `allocationId`, `allocationCount`, `legacyQuantity`, `costAttributionComplete`. The office must match the part, maintenance ticket, and linked asset; `createdBy` is the authenticated Firebase UID. The event is immutable.
+Append-only consumption event: `partId`, `partName`, `maintenanceId`, `assetId`, `officeId`, `quantity`, `unitCost`, `totalCost`, `notes`, `usedAt`, `createdBy`, `allocationId`, `allocationCount`, `legacyQuantity`, `costAttributionComplete`. `unitCost` is null whenever any quantity comes from untracked legacy stock; `totalCost` then contains only verified lot costs, never an inferred cost for the legacy quantity. The allocation lines are the source of supplier and per-lot cost attribution. The office must match the part, maintenance ticket, and linked asset; `createdBy` is the authenticated Firebase UID. The event is immutable.
 
 
 ## asset_documents
@@ -143,7 +143,7 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 - `spare_part_lots` تحفظ المورد وتكلفة الشراء والكمية الأصلية وتاريخ الاستلام، وهي غير قابلة للتعديل أو الحذف.
 - `spare_part_lot_balances` تحفظ الكمية المتبقية للدفعة. لا تتغير إلا ضمن معاملة صرف مرتبطة بتخصيص موثق، ولا يمكن حذفها.
 - `spare_part_allocations/{usageId}` سجل append-only واحد لكل حركة صرف، ويحمل `lines[]` لتوزيع الكمية على الرصيد التاريخي والدفعات. كل سطر يحدد `sourceType` والدفعة/الإيصال والمورد والكمية والتكلفة عند توفرها.
-- الرصيد `legacy_untracked` يستهلك أولاً ولا يحمل مورداً أو تكلفة مفترضة. يسجل الصرف `legacyQuantity` و`costAttributionComplete` في `maintenance_parts`. قيمة التكلفة المنسوبة لهذا الجزء صفر لأنها غير موثقة، ولا تُستنتج من سعر آخر توريد.
+- الرصيد `legacy_untracked` يستهلك أولاً ولا يحمل مورداً أو تكلفة مفترضة. يسجل الصرف `legacyQuantity` و`costAttributionComplete` في `maintenance_parts`. عند وجود أي كمية تاريخية، يكون `unitCost=null` ويحتوي `totalCost` على تكاليف الدفعات الموثقة فقط؛ لا تُحتسب تكلفة صفرية للوحدات التاريخية ولا يُستنتج لها سعر من آخر توريد.
 - بعد نفاد الرصيد التاريخي، يوزع الصرف FIFO حسب `receivedAt` ثم `createdAt`. يجب أن تطابق كميات خطوط التخصيص كمية الصرف، وتطابق تكلفتها قيمة الصرف.
 - لضبط ميزانية تحقق Firestore Rules، تحتوي حركة الصرف الواحدة على سطرين تخصيص كحد أقصى. إذا احتاجت الحركة أكثر من اثنين مصادر، يرفض الصرف برسالة واضحة ويجب تقسيمه إلى حركات أصغر على طلب الصيانة نفسه.
 - التقرير والتصدير يقرآن خطوط التخصيص لعرض المورد الفعلي وتكلفة كل مصدر. اختيار المورد في التقرير يفلتر أيضاً جزء الصرف المنسوب إلى ذلك المورد، ولا ينسب الرصيد التاريخي إلى أي مورد.
