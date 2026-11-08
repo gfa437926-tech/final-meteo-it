@@ -102,4 +102,4 @@ Append-only CSV import audit record: `sourceName, createdBy, createdAt, complete
 
 ## spare_part_receipts
 
-سجل توريد غير قابل للتعديل أو الحذف: `partId, officeId, quantity, quantityBefore, quantityAfter, unitCost, totalCost, supplier, notes, receivedAt, createdAt, createdBy`. يُنشأ فقط ضمن معاملة واحدة تحدث سجل `spare_parts` المرتبط. `createdBy` هو UID للمستخدم المصادق عليه، و`officeId` يطابق مكتب القطعة. تُحفظ تكلفة شراء الدفعة في الإيصال، ويُحدّث `spare_parts.unitCost` بمتوسط التكلفة المرجح. لا يسمح بزيادة الكمية أو تعديل المورد/متوسط التكلفة دون إيصال صحيح.
+سجل توريد غير قابل للتعديل أو الحذف: `partId, officeId, quantity, quantityBefore, quantityAfter, unitCost, totalCost, supplier, notes, receivedAt, createdAt, createdBy`. يُنشأ فقط ضمن معاملة واحدة تحدث سجل `spare_parts` المرتبط. `createdBy` هو UID للمستخدم المصادق عليه، و`officeId` يطابق مكتب القطعة. تُحفظ تكلفة شراء الدفعة في الإيصال، ويُحدّث `spare_parts.unitCost` بسعر شراء آخر دفعة. لا يسمح بزيادة الكمية أو تعديل المورد/متوسط التكلفة دون إيصال صحيح.
