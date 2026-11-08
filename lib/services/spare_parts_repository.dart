@@ -379,13 +379,23 @@ class SparePartsRepository {
     final officeId = initialPart['officeId'] as String? ?? '';
     if (officeId.isEmpty) throw StateError('قطعة الغيار لا ترتبط بمكتب صالح');
     final initialLastRestockId = initialPart['lastRestockId'];
-    final lotQuery = await db.collection('spare_part_lots')
+    final lotQuery = db.collection('spare_part_lots')
         .where('officeId', isEqualTo: officeId)
         .where('partId', isEqualTo: partId)
         .orderBy('receivedAt')
         .orderBy('createdAt')
-        .limit(500)
-        .get();
+        .limit(500);
+    final lotDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    DocumentSnapshot<Map<String, dynamic>>? lotCursor;
+    while (true) {
+      final pageQuery = lotCursor == null
+          ? lotQuery
+          : lotQuery.startAfterDocument(lotCursor);
+      final page = await pageQuery.get();
+      lotDocs.addAll(page.docs);
+      if (page.docs.length < 500) break;
+      lotCursor = page.docs.last;
+    }
 
     await db.runTransaction((transaction) async {
       final partSnapshot = await transaction.get(partRef);
@@ -434,15 +444,6 @@ class SparePartsRepository {
         throw StateError('رصيد المخزون التاريخي غير صالح');
       }
 
-      final lotSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
-      final balanceSnapshots = <DocumentSnapshot<Map<String, dynamic>>>[];
-      for (final lotDoc in lotQuery.docs) {
-        final lotRef = db.collection('spare_part_lots').doc(lotDoc.id);
-        final balanceRef = db.collection('spare_part_lot_balances').doc(lotDoc.id);
-        lotSnapshots.add(await transaction.get(lotRef));
-        balanceSnapshots.add(await transaction.get(balanceRef));
-      }
-
       var remainingToAllocate = quantity;
       final legacyQuantity = remainingToAllocate < untrackedAvailable
           ? remainingToAllocate
@@ -462,9 +463,12 @@ class SparePartsRepository {
       }
 
       final lotUpdates = <Map<String, dynamic>>[];
-      for (var i = 0; i < lotSnapshots.length && remainingToAllocate > 0; i++) {
-        final lotSnapshot = lotSnapshots[i];
-        final balanceSnapshot = balanceSnapshots[i];
+      for (final lotDoc in lotDocs) {
+        if (remainingToAllocate <= 0) break;
+        final lotRef = db.collection('spare_part_lots').doc(lotDoc.id);
+        final balanceRef = db.collection('spare_part_lot_balances').doc(lotDoc.id);
+        final lotSnapshot = await transaction.get(lotRef);
+        final balanceSnapshot = await transaction.get(balanceRef);
         if (!lotSnapshot.exists || !balanceSnapshot.exists) {
           throw StateError('دفعة توريد أو رصيدها غير موجود؛ أوقف الصرف وراجع السجل');
         }
@@ -485,6 +489,9 @@ class SparePartsRepository {
         final lotUnitCost = (lot['unitCost'] as num?)?.toDouble() ?? double.nan;
         if (!lotUnitCost.isFinite || lotUnitCost < 0) {
           throw StateError('تكلفة دفعة التوريد غير صالحة');
+        }
+        if (lines.length >= 5) {
+          throw StateError('تتطلب هذه الحركة أكثر من خمس دفعات؛ قسّم الصرف إلى حركات أصغر');
         }
         final lineTotal = take * lotUnitCost;
         lines.add({
