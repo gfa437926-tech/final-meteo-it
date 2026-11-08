@@ -76,6 +76,9 @@ class SparePartsRepository {
     required DateTime endExclusive,
     String? officeId,
   }) async {
+    if (!endExclusive.isAfter(start)) {
+      throw ArgumentError('نهاية الفترة يجب أن تكون بعد بدايتها');
+    }
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
     final profile = await db.collection('users').doc(uid).get();
@@ -101,46 +104,76 @@ class SparePartsRepository {
         allowedOffices != null && !allowedOffices.contains(officeId)) {
       throw StateError('لا تملك صلاحية الاطلاع على هذا المكتب');
     }
-
-    Query<Map<String, dynamic>> receiptsQuery =
-        db.collection('spare_part_receipts');
-    Query<Map<String, dynamic>> issuesQuery =
-        db.collection('maintenance_parts');
-    if (officeId != null && officeId.isNotEmpty) {
-      receiptsQuery = receiptsQuery.where('officeId', isEqualTo: officeId);
-      issuesQuery = issuesQuery.where('officeId', isEqualTo: officeId);
-    } else if (allowedOffices != null) {
-      if (allowedOffices.isEmpty) {
-        return <Map<String, dynamic>>[];
-      }
-      receiptsQuery = receiptsQuery.where('officeId', whereIn: allowedOffices);
-      issuesQuery = issuesQuery.where('officeId', whereIn: allowedOffices);
+    if (allowedOffices != null && allowedOffices.isEmpty) {
+      return <Map<String, dynamic>>[];
     }
 
-    final snapshots = await Future.wait([receiptsQuery.get(), issuesQuery.get()]);
+    final officeIdsToRead = officeId != null && officeId.isNotEmpty
+        ? <String>[officeId]
+        : allowedOffices;
     final events = <Map<String, dynamic>>[];
-    void appendEvents(QuerySnapshot<Map<String, dynamic>> snapshot,
-        String kind, String dateField, bool incoming) {
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final rawDate = data[dateField];
-        final eventDate = rawDate is Timestamp ? rawDate.toDate() :
-            rawDate is DateTime ? rawDate : null;
-        if (eventDate == null || eventDate.isBefore(start) ||
-            !eventDate.isBefore(endExclusive)) continue;
-        events.add({
-          ...data,
-          'eventId': doc.id,
-          'kind': kind,
-          'eventAt': eventDate,
-          'quantity': (data['quantity'] as num?)?.toInt() ?? 0,
-          'totalCost': (data['totalCost'] as num?)?.toDouble() ?? 0,
-          'isIncoming': incoming,
-        });
+    final startStamp = Timestamp.fromDate(start);
+    final endStamp = Timestamp.fromDate(endExclusive);
+
+    Future<void> appendCollection({
+      required String collection,
+      required String kind,
+      required String dateField,
+      required bool incoming,
+      String? office,
+    }) async {
+      Query<Map<String, dynamic>> query = db.collection(collection)
+          .where(dateField, isGreaterThanOrEqualTo: startStamp)
+          .where(dateField, isLessThan: endStamp)
+          .orderBy(dateField)
+          .limit(500);
+      if (office != null) {
+        query = query.where('officeId', isEqualTo: office);
+      }
+
+      DocumentSnapshot<Map<String, dynamic>>? cursor;
+      while (true) {
+        final pageQuery = cursor == null ? query : query.startAfterDocument(cursor);
+        final page = await pageQuery.get();
+        for (final doc in page.docs) {
+          final data = doc.data();
+          final rawDate = data[dateField];
+          final eventDate = rawDate is Timestamp ? rawDate.toDate() :
+              rawDate is DateTime ? rawDate : null;
+          if (eventDate == null) continue;
+          events.add({
+            ...data,
+            'eventId': doc.id,
+            'kind': kind,
+            'eventAt': eventDate,
+            'quantity': (data['quantity'] as num?)?.toInt() ?? 0,
+            'totalCost': (data['totalCost'] as num?)?.toDouble() ?? 0,
+            'isIncoming': incoming,
+          });
+        }
+        if (page.docs.length < 500) break;
+        cursor = page.docs.last;
       }
     }
-    appendEvents(snapshots[0], 'توريد', 'receivedAt', true);
-    appendEvents(snapshots[1], 'صرف', 'usedAt', false);
+
+    final officesToQuery = officeIdsToRead;
+    if (officesToQuery == null) {
+      await Future.wait([
+        appendCollection(collection: 'spare_part_receipts', kind: 'توريد',
+            dateField: 'receivedAt', incoming: true),
+        appendCollection(collection: 'maintenance_parts', kind: 'صرف',
+            dateField: 'usedAt', incoming: false),
+      ]);
+    } else {
+      for (final office in officesToQuery) {
+        await Future.wait([
+          appendCollection(collection: 'spare_part_receipts', kind: 'توريد',
+              dateField: 'receivedAt', incoming: true, office: office),
+          appendCollection(collection: 'maintenance_parts', kind: 'صرف',
+              dateField: 'usedAt', incoming: false, office: office),
+        ]);
+      }
+    }
     events.sort((a, b) =>
         (b['eventAt'] as DateTime).compareTo(a['eventAt'] as DateTime));
     return events;
