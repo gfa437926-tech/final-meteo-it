@@ -121,7 +121,7 @@ class SparePartsRepository {
 
 
   /// Atomically increases stock and appends an immutable receipt audit record.
-  /// The part's unitCost is recalculated as a weighted average.
+  /// The part's unitCost reflects the latest received batch price.
   Future<void> restock({
     required String partId,
     required int quantity,
@@ -195,6 +195,8 @@ class SparePartsRepository {
     required String notes,
   }) async {
     if (quantity <= 0) throw ArgumentError('الكمية يجب أن تكون أكبر من صفر');
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('يجب تسجيل الدخول أولاً');
     final partRef = parts.doc(partId);
     final ticketRef = _tickets.doc(maintenanceId);
     final usageRef = db.collection('maintenance_parts').doc();
@@ -269,6 +271,7 @@ class SparePartsRepository {
         'totalCost': totalCost,
         'notes': notes.trim(),
         'usedAt': now,
+        'createdBy': uid,
       });
     });
   }
