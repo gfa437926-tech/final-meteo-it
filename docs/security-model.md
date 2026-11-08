@@ -86,3 +86,6 @@ Until all six values are configured, the deployed site intentionally shows a Fir
 - الصرف عملية مترابطة غير قابلة للتجزئة: يجب أن تنقص كمية القطعة، وترتفع `partsCost` في طلب الصيانة، ويُنشأ سجل `maintenance_parts` واحد يحمل `lastUsageId` نفسه على القطعة والطلب.
 - قواعد Firestore تستخدم حالة ما بعد المعاملة للتحقق من تطابق القطعة وطلب الصيانة والأصل والمكتب، ومن أن الكمية انخفضت بمقدار المصروف وأن تكلفة القطع زادت بالقيمة الدقيقة نفسها.
 - لا يسمح بتعديل/حذف سجل الصرف، ولا بتعديل رصيد المخزون أو `partsCost` منفرداً. إعادة التوريد/التصحيح تحتاج مساراً إدارياً مستقلاً ومراجعة أمنية قبل إتاحته.
+
+
+**Maintenance query boundary:** `maintenance_records.officeId` is the queryable tenant boundary for manager reads. All client creation and update paths still verify that the referenced asset belongs to that office; records without `officeId` remain administrator-only. Manager UI filters open statuses after the office-scoped query to avoid combining multiple Firestore `in` filters beyond the 30-disjunction limit.
