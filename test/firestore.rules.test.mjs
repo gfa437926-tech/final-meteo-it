@@ -983,9 +983,13 @@ test('office-scoped inventory and open maintenance queries used by the UI are au
     where('officeId', 'in', ['office-a']),
     orderBy('name'),
   )));
-  await assertSucceeds(getDocs(query(
+  const tickets = await getDocs(query(
     collection(manager, 'maintenance_records'),
-    where('status', 'in', ['open', 'inProgress']),
     where('officeId', 'in', ['office-a']),
-  )));
+  ));
+  assert.deepEqual(
+    tickets.docs.map((ticket) => ticket.data().status)
+      .filter((status) => status === 'open' || status === 'inProgress'),
+    ['open'],
+  );
 });
