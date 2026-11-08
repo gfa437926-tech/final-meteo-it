@@ -331,6 +331,86 @@ service cloud.firestore {
         get(/databases/$(database)/documents/assets/$(assetId)).data.officeId == officeId &&
         canAccessAssetId(assetId);
     }
+    function validPartsUsageLink(usageId, usage) {
+      let partPath = /databases/$(database)/documents/spare_parts/$(usage.partId);
+      let ticketPath = /databases/$(database)/documents/maintenance_records/$(usage.maintenanceId);
+      let assetPath = /databases/$(database)/documents/assets/$(usage.assetId);
+      return usageId is string && usageId.size() > 0 &&
+        usage.partId is string && usage.maintenanceId is string &&
+        usage.assetId is string && usage.officeId is string &&
+        usage.quantity is int && usage.quantity > 0 &&
+        usage.unitCost is number && usage.unitCost >= 0 &&
+        usage.totalCost is number && usage.totalCost == usage.unitCost * usage.quantity &&
+        usage.notes is string && usage.usedAt is timestamp &&
+        existsAfter(partPath) && existsAfter(ticketPath) &&
+        exists(assetPath) &&
+        getAfter(partPath).data.lastUsageId == usageId &&
+        getAfter(ticketPath).data.lastPartsUsageId == usageId &&
+        getAfter(partPath).data.officeId == usage.officeId &&
+        getAfter(ticketPath).data.officeId == usage.officeId &&
+        get(assetPath).data.officeId == usage.officeId &&
+        getAfter(ticketPath).data.assetId == usage.assetId &&
+        getAfter(ticketPath).data.status in ['open', 'inProgress'] &&
+        canAccessAssetId(usage.assetId) &&
+        hasOfficeAccess(usage.officeId);
+    }
+
+    function validSparePart(data, officeId) {
+      return data.keys().hasOnly([
+          'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
+          'unitCost', 'supplier', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasAll([
+          'officeId', 'name', 'sku', 'quantity', 'minimumQuantity',
+          'unitCost', 'supplier', 'createdAt', 'updatedAt'
+        ]) &&
+        data.officeId == officeId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 180 &&
+        data.sku is string && data.sku.size() > 0 && data.sku.size() <= 80 &&
+        data.quantity is int && data.quantity >= 0 &&
+        data.minimumQuantity is int && data.minimumQuantity >= 0 &&
+        data.unitCost is number && data.unitCost >= 0 &&
+        data.supplier is string &&
+        data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validSparePartConsumption(partId) {
+      let usageId = request.resource.data.get('lastUsageId', null);
+      let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
+      let ticketPath = /databases/$(database)/documents/maintenance_records/$(getAfter(usagePath).data.maintenanceId);
+      return usageId is string &&
+        existsAfter(usagePath) &&
+        request.resource.data.officeId == resource.data.officeId &&
+        request.resource.data.quantity == resource.data.quantity - getAfter(usagePath).data.quantity &&
+        request.resource.data.unitCost == resource.data.unitCost &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['quantity', 'lastUsageId', 'updatedAt']) &&
+        request.resource.data.updatedAt is timestamp &&
+        getAfter(usagePath).data.partId == partId &&
+        getAfter(usagePath).data.officeId == resource.data.officeId &&
+        getAfter(ticketPath).data.lastPartsUsageId == usageId;
+    }
+
+    function validMaintenancePartsCostUpdate(recordId) {
+      let usageId = request.resource.data.get('lastPartsUsageId', null);
+      let usagePath = /databases/$(database)/documents/maintenance_parts/$(usageId);
+      return usageId is string &&
+        existsAfter(usagePath) &&
+        request.resource.data.assetId == resource.data.assetId &&
+        request.resource.data.officeId == resource.data.officeId &&
+        request.resource.data.status == resource.data.status &&
+        resource.data.status in ['open', 'inProgress'] &&
+        request.resource.data.partsCost ==
+          resource.data.get('partsCost', 0) + getAfter(usagePath).data.totalCost &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['partsCost', 'lastPartsUsageId', 'updatedAt']) &&
+        request.resource.data.updatedAt is timestamp &&
+        getAfter(usagePath).data.maintenanceId == recordId &&
+        getAfter(usagePath).data.assetId == resource.data.assetId &&
+        getAfter(usagePath).data.officeId == resource.data.officeId &&
+        getAfter(usagePath).data.lastUsageId == null;
+    }
+
     match /maintenance_records/{recordId} {
       allow read: if isSuperAdmin() ||
         (resource.data.keys().hasAll(['assetId', 'officeId']) &&
@@ -339,7 +419,8 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['assetId', 'officeId']) &&
         linkedAssetOffice(request.resource.data.assetId, request.resource.data.officeId) &&
         request.resource.data.status == 'open';
-      allow update: if isAdmin() &&
+      allow update: if (
+        isAdmin() &&
         resource.data.keys().hasAll(['assetId', 'officeId', 'previousAssetStatus']) &&
         linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
         request.resource.data.assetId == resource.data.assetId &&
@@ -354,7 +435,13 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'resolution', 'cost', 'completedAt']) &&
         getAfter(/databases/$(database)/documents/assets/$(resource.data.assetId)).data.status ==
-          resource.data.previousAssetStatus;
+          resource.data.previousAssetStatus
+      ) || (
+        isAdmin() &&
+        hasOfficeAccess(resource.data.officeId) &&
+        linkedAssetOffice(resource.data.assetId, resource.data.officeId) &&
+        validMaintenancePartsCostUpdate(recordId)
+      );
       allow delete: if false;
     }
     match /purchase_records/{recordId} {
@@ -370,9 +457,19 @@ service cloud.firestore {
     }
 
     match /maintenance_parts/{usageId} {
-      allow read: if canAccessAssetId(resource.data.assetId);
+      allow read: if isSuperAdmin() ||
+        (resource.data.keys().hasAll(['assetId', 'officeId']) &&
+         linkedAssetOffice(resource.data.assetId, resource.data.officeId));
       allow create: if isAdmin() &&
-        canAccessAssetId(request.resource.data.assetId);
+        validPartsUsageLink(usageId, request.resource.data) &&
+        request.resource.data.keys().hasOnly([
+          'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'partId', 'partName', 'maintenanceId', 'assetId', 'officeId',
+          'quantity', 'unitCost', 'totalCost', 'notes', 'usedAt'
+        ]);
       allow update, delete: if false;
     }
 
@@ -419,11 +516,14 @@ service cloud.firestore {
 
     match /spare_parts/{partId} {
       // Office stock is isolated; legacy stock without officeId remains
-      // visible to the global administrator only.
+      // visible to the global administrator only and cannot be consumed.
       allow read: if canReadAsset(resource.data);
-      allow create: if canWriteAsset(request.resource.data);
+      allow create: if canWriteAsset(request.resource.data) &&
+        validSparePart(request.resource.data, request.resource.data.officeId);
+      // Stock can only decrease as part of a linked, atomic maintenance usage.
+      // Restocking or correcting stock requires a separately reviewed flow.
       allow update: if canWriteAsset(resource.data) &&
-        canWriteAsset(request.resource.data);
+        validSparePartConsumption(partId);
       allow delete: if false;
     }
 
