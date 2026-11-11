@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CustodyRecord {
   const CustodyRecord({
@@ -58,12 +59,47 @@ class CustodyRepository {
   CollectionReference<Map<String, dynamic>> get ref =>
       db.collection('custody_cards');
 
-  Stream<List<CustodyRecord>> watch() => ref
-      .orderBy('assignedAt', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs
-          .map((doc) => CustodyRecord.fromMap(doc.id, doc.data()))
-          .toList());
+  Future<List<String>> _activeAssignedOfficeIds(List<String> officeIds) async {
+    if (officeIds.isEmpty) return const <String>[];
+    final snapshot = await db
+        .collection('offices')
+        .where(FieldPath.documentId, whereIn: officeIds)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map((document) => document.id).toList();
+  }
+
+  Stream<List<CustodyRecord>> watch() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return Stream.value(const <CustodyRecord>[]);
+    return db.collection('users').doc(uid).snapshots().asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) return Stream.value(const <CustodyRecord>[]);
+      Query<Map<String, dynamic>> query = ref;
+      if (data['role'] != 'admin') {
+        final raw = data['officeIds'];
+        final officeIds = raw is List
+            ? raw.whereType<String>().toSet().toList()
+            : <String>[];
+        if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+          return Stream.value(const <CustodyRecord>[]);
+        }
+        return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+            .asyncExpand((activeOfficeIds) {
+          if (activeOfficeIds.isEmpty) return Stream.value(const <CustodyRecord>[]);
+          return ref.where('officeId', whereIn: activeOfficeIds).snapshots().map(_mapSorted);
+        });
+      }
+      return query.snapshots().map(_mapSorted);
+    });
+  }
+
+  List<CustodyRecord> _mapSorted(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    final documents = snapshot.docs.toList()
+      ..sort((a, b) => (b.data()['assignedAt'] as String? ?? '')
+          .compareTo(a.data()['assignedAt'] as String? ?? ''));
+    return documents.map((doc) => CustodyRecord.fromMap(doc.id, doc.data())).toList();
+  }
 
   Future<void> returnAsset(CustodyRecord record) =>
       db.runTransaction((transaction) async {
@@ -94,6 +130,10 @@ class CustodyRepository {
           throw StateError('الأصل المرتبط غير موجود');
         }
         final assetData = assetSnapshot.data()!;
+        final officeId = assetData['officeId'] as String? ?? '';
+        if (officeId.isEmpty || officeId != cardData['officeId']) {
+          throw StateError('مكتب الأصل لا يطابق مكتب بطاقة العهدة');
+        }
         if (assetData['status'] != 'assigned') {
           throw StateError('حالة الأصل لا تسمح بإتمام الإرجاع');
         }
@@ -113,6 +153,7 @@ class CustodyRepository {
         final movementRef = db.collection('asset_movements').doc();
         transaction.set(movementRef, {
           'assetId': assetId,
+          'officeId': officeId,
           'assetLabel': assetLabel,
           'movementType': 'returned',
           'fromEmployee': employeeName,
@@ -150,6 +191,8 @@ class CustodyRepository {
           throw StateError('الجهاز غير متاح للتسليم أو تم تسليمه مسبقاً');
         }
 
+        final officeId = assetData['officeId'] as String? ?? '';
+        if (officeId.isEmpty) throw StateError('الأصل غير مرتبط بمكتب');
         final brand = assetData['brand'] as String? ?? '';
         final model = assetData['model'] as String? ?? '';
         final assetLabel = '$brand $model'.trim();
@@ -157,6 +200,7 @@ class CustodyRepository {
 
         transaction.set(cardRef, {
           ...record.toMap(),
+          'officeId': officeId,
           'assetLabel': assetLabel,
           'employeeName': employeeName,
           'officeName': officeName,
@@ -171,6 +215,7 @@ class CustodyRepository {
         final movementRef = db.collection('asset_movements').doc();
         transaction.set(movementRef, {
           'assetId': record.assetId,
+          'officeId': officeId,
           'assetLabel': assetLabel,
           'movementType': 'assigned',
           'toEmployee': employeeName,
@@ -199,6 +244,7 @@ class CustodyRepository {
         final movement = db.collection('asset_movements').doc();
         transaction.set(movement, {
           'assetId': data['assetId'],
+          'officeId': data['officeId'],
           'assetLabel': data['assetLabel'],
           'movementType': 'custody_approved',
           'toEmployee': data['employeeName'],
@@ -227,7 +273,12 @@ class CustodyRepository {
         final assetRef = db.collection('assets').doc(assetId);
         final assetSnapshot = await transaction.get(assetRef);
         if (!assetSnapshot.exists) throw StateError('الأصل المرتبط غير موجود');
-        if (assetSnapshot.data()?['status'] != 'assigned') {
+        final assetData = assetSnapshot.data()!;
+        final officeId = assetData['officeId'] as String? ?? '';
+        if (officeId.isEmpty || officeId != data['officeId']) {
+          throw StateError('مكتب الأصل لا يطابق مكتب بطاقة العهدة');
+        }
+        if (assetData['status'] != 'assigned') {
           throw StateError('حالة الأصل لا تسمح برفض العهدة');
         }
         final now = DateTime.now().toIso8601String();
@@ -242,6 +293,7 @@ class CustodyRepository {
         final movement = db.collection('asset_movements').doc();
         transaction.set(movement, {
           'assetId': assetId,
+          'officeId': officeId,
           'assetLabel': data['assetLabel'],
           'movementType': 'custody_rejected',
           'fromEmployee': data['employeeName'],
@@ -291,6 +343,10 @@ class CustodyRepository {
           throw StateError('حالة الأصل لا تسمح بنقل العهدة');
         }
 
+        final officeId = assetData['officeId'] as String? ?? '';
+        if (officeId.isEmpty || officeId != cardData['officeId']) {
+          throw StateError('مكتب الأصل لا يطابق مكتب بطاقة العهدة');
+        }
         final previousEmployee = cardData['employeeName'] as String? ?? '';
         final previousOffice = cardData['officeName'] as String? ?? '';
         final brand = assetData['brand'] as String? ?? '';
@@ -308,6 +364,7 @@ class CustodyRepository {
         final movementRef = db.collection('asset_movements').doc();
         transaction.set(movementRef, {
           'assetId': assetId,
+          'officeId': officeId,
           'assetLabel': assetLabel,
           'movementType': 'custody_transferred',
           'fromEmployee': previousEmployee,

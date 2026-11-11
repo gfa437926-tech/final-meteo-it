@@ -87,16 +87,14 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
                 .where((office) => office.isActive || office.id == officeId)
                 .toList();
             return DropdownButtonFormField<String>(
-              initialValue: officeId ?? '',
+              initialValue: officeId,
               decoration: const InputDecoration(
                 labelText: 'المكتب الحالي',
-                helperText: 'يمكن إسناد الأصل إلى مكتب الآن أو لاحقاً',
+                helperText: 'يجب إسناد كل أصل جديد إلى مكتب محدد',
               ),
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'اختر المكتب المرتبط بالأصل' : null,
               items: [
-                const DropdownMenuItem<String>(
-                  value: '',
-                  child: Text('غير محدد'),
-                ),
                 ...offices.map((office) => DropdownMenuItem<String>(
                   value: office.id,
                   child: Text(office.isActive ? office.name : '${office.name} (متوقف)'),

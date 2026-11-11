@@ -7,7 +7,9 @@
 - The application currently admits only `admin` and `it_manager` roles.
 - A super administrator (`admin`) can create and update profile documents for other Firebase Authentication accounts.
 - The application does not create Authentication accounts or passwords. Create accounts through the approved identity-admin process, then register their UID in the application or use the guarded create-only CLI in `scripts/provision-user.mjs`.
-- Active users may update only their own `displayName`, `email`, and `updatedAt` profile fields; inactive accounts cannot use self-service profile updates, and users cannot change their own role or active state.
+- Active users may update only their own `displayName`, `email`, and `updatedAt` profile fields; inactive accounts cannot use self-service profile updates, and users cannot change their own role, active state, or `officeIds`.
+- A global administrator profile stores `officeIds: []`; an IT manager profile must have 1–20 office IDs. Legacy profiles without `officeIds` remain readable but have no office access until assigned by a super administrator.
+- Only the super administrator can provision users or assign/change their `officeIds`.
 - User deletion is disabled from the client.
 
 ## Current permission matrix
@@ -15,11 +17,16 @@
 | Capability | admin | it_manager |
 |---|---:|---:|
 | Sign in when active | Yes | Yes |
-| Read inventory and movement data | Yes | Yes |
-| Create/update assets, offices, custody and maintenance records | Yes | Yes |
-| Manage other user profiles and roles | Yes | No |
+| Read all offices and assets, including legacy unassigned assets | Yes | No |
+| Read assigned offices and assets only | Yes | Yes |
+| Create/update assets in an assigned active office | Yes | Yes |
+| Transfer an asset between offices | Yes | Only when assigned to both source and destination |
+| Create/update office catalogue records | Yes | No |
+| Read linked custody cards, asset documents, maintenance records, purchase records, maintenance-part usage and movement records | All offices | Only through assigned assets/offices |
+| Read/write spare-parts stock | All records | Only records carrying an assigned `officeId` |
+| Manage other user profiles and assign offices | Yes | No |
 | Disable another account | Yes | No |
-| Change own role or active state | No | No |
+| Change own role, active state or office assignments | No | No |
 
 ## Data integrity
 
@@ -35,11 +42,13 @@
 ## Firestore and Storage controls
 
 - Administrative predicates require an authenticated user with an active profile and an allowed role.
-- Inventory reads require an active profile; administrative writes require an active admin/IT-manager profile.
-- User role elevation is blocked by rules; only a super administrator can manage another user's profile.
-- Import batch audit records are actor-bound, schema-validated, bounded to 100 rows, and append-only.
-- Asset attachments are private, limited to approved MIME types and less than 10 MB; client updates and deletes are denied.
-- Emulator tests cover authentication/profile gates, role elevation, custody atomicity, import audit validation, and Storage access restrictions.
+- Office and asset reads are office-scoped in Firestore. IT-manager queries are constrained to assigned, active offices before assets are fetched. Deactivating an office revokes manager access to its office record, assets, movements, and Storage attachments. An asset without `officeId` is legacy/unassigned and is visible only to the global administrator.
+- Asset creates and updates require a real active office. IT managers must be assigned to that office; an update must be authorized for both the old and new office. The global administrator can move a legacy or inactive-office asset into an active office.
+- Office catalogue creation and updates are restricted to the global administrator; office deletion remains disabled.
+- Serial indexes, movement records, custody cards, Firestore attachment metadata, maintenance records, purchase records, and maintenance-part usage are linked to the asset office. New custody cards persist the linked asset's `officeId`; manager reads use office-constrained queries, while historical cards without `officeId` remain administrator-only. Maintenance and purchase records must carry the exact `officeId` of their linked asset; rules resolve the asset rather than trusting a client-supplied office. Their office and asset links cannot be changed by record updates, and deletion is denied. Attachment metadata must match the linked asset's office. Storage reads/uploads resolve the asset document and enforce the same active-office check.
+- Spare-parts stock is scoped by its own `officeId`; records without an office remain admin-only. Shared lookup catalogues remain available to active users.
+- Import batch audit records are actor-bound, schema-validated, bounded to 100 rows, and append-only; this audit area remains role-based rather than office-scoped.
+- Emulator tests cover authentication/profile gates, office A/B isolation, scoped queries, dual-office transfer, custody/document metadata, Storage access, role elevation, and import audit validation.
 
 ## Release limitations and production gates
 
@@ -47,7 +56,7 @@ This remains a development and controlled pre-pilot baseline, not a production-r
 
 1. **Firebase project and web app:** create/select a dedicated Firebase project for this IT inventory app, register its Web app, and set the six documented GitHub Actions repository Variables. The Pages workflow currently builds and deploys a deliberate setup screen when these values are absent; a successful Pages deployment does not prove Firebase connectivity.
 2. **Rules deployment:** review the selected Firebase project ID, run the emulator suite, then deploy Firestore and Storage rules only to the dedicated inventory project. No production rules have been deployed by this repository workflow.
-3. **Authorization:** office-scoped roles and office-level data isolation remain unimplemented. A trusted create-only profile provisioning CLI is available; Authentication account creation remains a separate identity-admin operation. Current rules allow active admin/IT-manager accounts broad inventory access.
+3. **Authorization completion:** this branch implements office scoping for offices, assets, serial indexes, movements, linked custody/document/maintenance-part records, maintenance records, purchase records, spare-parts records with `officeId`, and Storage attachments. Do not deploy until CI passes, the PR is reviewed, and the dedicated Firebase project is confirmed. Legacy IT-manager profiles must be assigned offices by the super administrator before access is restored. A trusted create-only profile provisioning CLI remains available; Authentication account creation is a separate identity-admin operation.
 4. **App Check and privileged sign-in:** configure and verify App Check per supported platform, enforce MFA for privileged accounts where supported, and test all production clients before enforcement.
 5. **Data operations:** complete the serial reservation backfill, configure scheduled backups, and perform a documented restore drill before bulk import.
 6. **Operational validation:** configure monitoring/alerts and verify Android, Windows, and Web builds on real target devices.
@@ -68,3 +77,75 @@ The Pages workflow reads these repository Actions Variables:
 Set them under repository Settings → Secrets and variables → Actions → Variables using the Web app configuration from the dedicated inventory Firebase project. These are client configuration identifiers, not Admin SDK credentials.
 
 Until all six values are configured, the deployed site intentionally shows a Firebase setup screen. Native Android/Windows builds require their own FlutterFire platform configuration. This setup does not create a Firebase project, enable services, provision users, or deploy security rules.
+
+
+## ضوابط مخزون قطع الغيار
+
+- المخزون مملوك لمكتب محدد عبر `officeId`؛ مدير المكتب لا يقرأ ولا يضيف ولا يصرف من مخزون مكتب آخر. المدير العام يحتفظ بالوصول الشامل.
+- السجلات التاريخية التي لا تحتوي `officeId` تبقى للمدير العام فقط ولا يسمح باستخدامها في عملية صرف.
+- الصرف عملية مترابطة غير قابلة للتجزئة: يجب أن تنقص كمية القطعة، وترتفع `partsCost` في طلب الصيانة، ويُنشأ سجل `maintenance_parts` واحد يحمل `lastUsageId` نفسه على القطعة والطلب.
+- قواعد Firestore تستخدم حالة ما بعد المعاملة للتحقق من تطابق القطعة وطلب الصيانة والأصل والمكتب، ومن أن الكمية انخفضت بمقدار المصروف وأن تكلفة القطع زادت بالقيمة الدقيقة نفسها.
+- لا يسمح بتعديل/حذف سجل الصرف، ولا بتعديل رصيد المخزون أو `partsCost` منفرداً. إعادة التوريد/التصحيح تحتاج مساراً إدارياً مستقلاً ومراجعة أمنية قبل إتاحته.
+
+
+**Maintenance query boundary:** `maintenance_records.officeId` is the queryable tenant boundary for manager reads. All client creation and update paths still verify that the referenced asset belongs to that office; records without `officeId` remain administrator-only. Manager UI filters open statuses after the office-scoped query to avoid combining multiple Firestore `in` filters beyond the 30-disjunction limit.
+
+
+## إعادة توريد مخزون قطع الغيار
+
+- كل إعادة توريد تنشئ سجلاً append-only في `spare_part_receipts` يحمل القطعة والمكتب والكمية قبل وبعد التوريد وتكلفة الشراء للوحدة والإجمالي والمورد والملاحظات وتاريخ الاستلام ووقت التسجيل وهوية المنفذ من جلسة Firebase الموثقة.
+- يجب أن يُنشأ إيصال التوريد وتُحدّث كمية القطعة والمورد وتكلفة الوحدة الحالية في معاملة Firestore واحدة. قواعد Firestore تتحقق من تطابق المكتب والقطعة والمنفذ ومعرّف الإيصال ومن معادلة الكمية والتكلفة.
+- يحتفظ الإيصال بتكلفة الشراء الفعلية للدفعة، ويعكس حقل `unitCost` في سجل القطعة تكلفة آخر دفعة مورّدة. لا يُعاد احتساب متوسط مرجح على العميل.
+- لا يسمح بزيادة الرصيد أو تغيير المورد أو متوسط التكلفة دون إيصال مطابق، ولا يسمح بتعديل أو حذف إيصالات التوريد. السجلات مقروءة ضمن نطاق المكتب، والمدير العام يملك القراءة الشاملة.
+
+
+## سجل حركة المخزون والتقارير المالية
+
+- شاشة مخزون قطع الغيار تعرض سجل حركة لكل قطعة، ويجمع إيصالات التوريد غير القابلة للتعديل مع حركات الصرف المرتبطة بطلبات الصيانة.
+- يُسجل منفذ الصرف في maintenance_parts.createdBy من Firebase Auth، وتفرض القواعد تطابقه مع request.auth.uid. إيصالات التوريد تتبع الضابط نفسه.
+- قراءة سجل الصرف تعتمد على officeId المثبت عند الإنشاء بعد التحقق من تطابق القطعة وطلب الصيانة والأصل؛ السجلات غير قابلة للتعديل أو الحذف، والاستعلامات تتطلب نطاق المكتب والقطعة.
+- التقرير يعرض الرصيد الافتتاحي المحسوب، الوارد والمنصرف، الرصيد الحالي، تكلفة التوريد، قيمة الصرف، وأسماء الموردين. لا يُنشأ سجل افتتاحي وهمي للبيانات القديمة.
+- لا توجد تسوية أو حذف أو تعديل مالي من واجهة العميل. أي تصحيح مستقبلي يجب أن يكون حركة عكسية/تسوية جديدة بمراجعة أمنية، مع إبقاء السجل الأصلي محفوظاً.
+
+
+## حدود تقارير حركة المخزون
+
+- تقارير الفترة تقرأ إيصالات التوريد وسجلات الصرف الموجودة فقط، وتُقيّد الاستعلامات أولاً بـ `officeId` للمكاتب النشطة المصرح بها. لا يتيح التقرير استعلاماً عاماً لمدير المكتب.
+- المدير العام يقرأ جميع المكاتب، ومدير تقنية المعلومات يقرأ مكاتبه النشطة المسندة إليه فقط. اختيار مكتب خارج نطاق الصلاحية يُرفض داخل repository قبل القراءة.
+- التقرير read-only؛ لا يكتب أو يحدّث أو يحذف إيصالاً أو حركة صرف. اختيار المورد يفلتر الوارد وحصة الصرف المنسوبة إلى دفعات ذلك المورد عبر سجل FIFO. تبقى الكمية التاريخية غير المنسوبة وحركات الصرف القديمة بلا مورد ولا تُنسب إلى آخر مورد للقطعة.
+- بيانات المورد في التقرير تمثل مورد إيصال التوريد أو دفعة FIFO المحددة في تخصيص الصرف. لا يُنسب الرصيد التاريخي أو حركات الصرف القديمة إلى مورد مفترض.
+
+
+## فهارس وتقسيم قراءة تقارير المخزون
+
+- تقييد استعلامات التقرير بالفترة الزمنية داخل Firestore قبل جلب النتائج، مع pagination باستخدام cursor وحد 500 سجل للصفحة.
+- للمكاتب المسندة، ينفذ التقرير استعلاماً لكل مكتب نشط بدلاً من قائمة `whereIn` غير محدودة؛ ويُجزّأ التحقق من المكاتب إلى دفعات من 30 معرفاً.
+- فهارس مركبة: `spare_part_receipts(officeId ASC, receivedAt ASC)` و`maintenance_parts(officeId ASC, usedAt ASC)`. يجب نشرها في بيئة Firebase بعد الموافقة المنفصلة، ولم يتم نشرها هنا.
+- تصدير XLSX يتم على البيانات التي اجتازت فحوص الصلاحية والفترة والمرشحات فقط، ولا يمنح الملف صلاحيات وصول إضافية إلى قاعدة البيانات.
+
+
+- تعرض التقارير مقارنة شهرية وسنوية مشتقة من حركات الفترة والمكتب المصرح بهما. فلتر المورد يقيّد التوريد فقط ولا يحذف الصرف من المقارنة.
+- يحتوي XLSX على تفاصيل الحركات ومجاميع شهرية وسنوية؛ لا يضيف صلاحية أو مسار كتابة إلى السجل المالي.
+
+
+## ضوابط تتبع دفعات قطع الغيار
+
+- التوريد ينشئ إيصالاً ودفعة ثابتة ورصيد دفعة في معاملة واحدة. قواعد Firestore تربط معرف الإيصال والدفعة والقطعة والمكتب والمنفذ والكمية والتكلفة باستخدام حالة ما بعد المعاملة.
+- بيانات الدفعة والإيصال والتخصيصات append-only. أرصدة الدفعات وحدها قابلة للتخفيض ضمن صرف صحيح، ويجب أن يطابق التخفيض سطر التخصيص نفسه؛ لا يمكن رفع رصيد دفعة أو حذفه من العميل.
+- سجل التخصيص `spare_part_allocations/{usageId}` وثيق الصلة بسجل `maintenance_parts/{usageId}` ويحمل خطوط FIFO. القواعد تتحقق من تطابق مجموع كميات الخطوط وتكاليفها مع سجل الصرف، وتربط كل دفعة برصيدها وإيصالها ومكتبها.
+- الرصيد التاريخي غير المنسوب يستهلك قبل الدفعات الجديدة. لا يحمل مورداً أو تكلفة مفترضة؛ يسجل `costAttributionComplete=false` عندما يدخل في الصرف. ويُحتسب الجزء غير المنسوب بتكلفة صفر موثقة بدلاً من نسبة سعر آخر توريد إليه.
+- كل قراءة وكتابة للمجموعات الجديدة محكومة بـ `officeId`: المدير العام شامل، ومدير المكتب يقتصر على المكاتب النشطة المسندة إليه. معرف المنفذ يستمد من جلسة Firebase Auth.
+- تقتصر حركة الصرف الواحدة على سطرين تخصيص بسبب حدود تقييم قواعد Firestore؛ يجب تقسيم الحركة التي تتطلب مصادر أكثر إلى حركات أصغر. لا يؤثر هذا الحد على كمية الرصيد الإجمالية ولا يسمح بتجاوز المتاح.
+- فهرس FIFO أضيف إلى `firestore.indexes.json` ولم يُنشر. نشر القواعد أو الفهارس إلى Firebase production ليس جزءاً من CI ولا يتم دون موافقة مستقلة.
+
+
+### FIFO enforcement boundary
+
+The Flutter repository selects lots in FIFO order by `receivedAt` then `createdAt`. Firestore rules validate the new usage/allocation bundle, office and actor links, exact lot-cost metadata, matching balance decrements, immutable records, and replay prevention. Firestore Security Rules cannot query all open lot balances to prove that a client-selected lot is globally the oldest available lot. Therefore, the current client workflow provides FIFO selection for the supported application but is not a tamper-proof FIFO authority against a modified client. Before treating supplier FIFO ordering as a production security guarantee, route consumption through a trusted server-side transaction (for example, an authenticated callable function or the approved backend) and deny direct client writes to the stock/allocation transaction collections. No such server-side service is deployed by this branch.
+
+
+### FIFO enforcement boundary
+
+The callable `consumeSparePart` function is the only client-facing write path for consumption. It derives the actor from Firebase Authentication, validates the active profile and office assignment, queries the lot catalogue in FIFO order inside the same Firestore transaction, verifies each lot against its immutable receipt and balance, and atomically updates stock, maintenance cost, lot balances, usage and allocation records. The shared `spare_parts` document serializes consumption with concurrent restocks and other consumption transactions. Before allocation, the function reads every lot balance (up to 400) and requires `spare_parts.quantity == untrackedQuantity + sum(lot.remainingQuantity)`; every lot must match its immutable receipt. Missing legacy initialization or any stock reconciliation mismatch fails closed before writes.
+
+Firestore Rules deny client writes to consumption records, allocation records and lot balances, and deny direct stock/maintenance-cost consumption updates. The function uses the Admin SDK and is not deployed by CI. Before production use, deploy it only to the dedicated inventory Firebase project, verify its region and IAM/runtime configuration, enable App Check enforcement after client attestation is configured, and test callable authorization end-to-end. Each request scans at most 400 FIFO lot records; larger allocations are rejected atomically and must be split into smaller consumption operations.

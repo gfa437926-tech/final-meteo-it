@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:metra_it_assets/models/purchase_record.dart';
 import 'package:metra_it_assets/services/purchase_repository.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -42,7 +43,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                 const SizedBox(height: 8),
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance.collection('asset_documents')
-                      .where('purchaseRecordId', isEqualTo: record.id).snapshots(),
+                      .where('purchaseRecordId', isEqualTo: record.id)
+                      .where('assetId', isEqualTo: record.assetId)
+                      .where('officeId', isEqualTo: record.officeId)
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) return Text('تعذر تحميل المرفقات: ${snapshot.error}');
                     if (!snapshot.hasData) return const LinearProgressIndicator();
@@ -128,11 +132,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('assets')
-                          .orderBy('brand')
-                          .snapshots(),
+                    StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+                      stream: AssetRepository().watchAssetDocuments(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Text('تعذر تحميل الأصول: ${snapshot.error}');
@@ -140,7 +141,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                         if (!snapshot.hasData) {
                           return const LinearProgressIndicator();
                         }
-                        final assets = snapshot.data!.docs;
+                        final assets = snapshot.data!;
                         return DropdownButtonFormField<String>(
                           initialValue: assetId,
                           decoration: const InputDecoration(labelText: 'الأصل المرتبط'),

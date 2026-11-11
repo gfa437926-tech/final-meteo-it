@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:metra_it_assets/models/asset.dart';
 import 'package:metra_it_assets/models/office.dart';
 
@@ -16,6 +17,16 @@ class AssetRepository {
   CollectionReference<Map<String, dynamic>> get _serials =>
       _db.collection('asset_serials');
 
+  Future<List<String>> _activeAssignedOfficeIds(List<String> officeIds) async {
+    if (officeIds.isEmpty) return const <String>[];
+    final snapshot = await _db
+        .collection('offices')
+        .where(FieldPath.documentId, whereIn: officeIds)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map((document) => document.id).toList();
+  }
+
   String _normalizeSerial(String serial) => serial.trim().toUpperCase();
 
   DocumentReference<Map<String, dynamic>> _serialRef(String serial) {
@@ -25,21 +36,141 @@ class AssetRepository {
     return _serials.doc(encoded);
   }
 
-  Stream<List<Asset>> watchAssets() =>
-      _assets.orderBy('brand').snapshots().map((snapshot) =>
-          snapshot.docs.map((doc) => Asset.fromMap(doc.id, doc.data())).toList());
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      watchAssetDocuments({String? status, List<String>? statuses}) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return Stream.value(
+        const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+      );
+    }
+    return Stream.fromFuture(_db.collection('users').doc(uid).get())
+        .asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) {
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
+      }
+      if (data['role'] == 'admin') {
+        return _assets.snapshots().map((snapshot) => _filterAssetDocuments(
+              snapshot.docs, status: status, statuses: statuses));
+      }
+      final rawOfficeIds = data['officeIds'];
+      final officeIds = rawOfficeIds is List
+          ? rawOfficeIds.whereType<String>().toSet().toList()
+          : <String>[];
+      if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
+      }
+      // The query itself is office constrained; client-side filtering alone
+      // would still request records outside the caller's authorization scope.
+      return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+          .asyncExpand((activeOfficeIds) {
+        if (activeOfficeIds.isEmpty) {
+          return Stream.value(
+            const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          );
+        }
+        return _assets
+            .where('officeId', whereIn: activeOfficeIds)
+            .snapshots()
+            .map((snapshot) => _filterAssetDocuments(
+                  snapshot.docs, status: status, statuses: statuses));
+      });
+    });
+  }
+
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      watchMovementDocuments({int limit = 5}) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return Stream.value(
+        const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+      );
+    }
+    return Stream.fromFuture(_db.collection('users').doc(uid).get())
+        .asyncExpand((profile) {
+      final data = profile.data() ?? const <String, dynamic>{};
+      if (data['isActive'] != true) {
+        return Stream.value(
+          const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+        );
+      }
+      Query<Map<String, dynamic>> query = _db.collection('asset_movements');
+      if (data['role'] != 'admin') {
+        final rawOfficeIds = data['officeIds'];
+        final officeIds = rawOfficeIds is List
+            ? rawOfficeIds.whereType<String>().toSet().toList()
+            : <String>[];
+        if (data['role'] != 'it_manager' || officeIds.isEmpty) {
+          return Stream.value(
+            const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          );
+        }
+        return Stream.fromFuture(_activeAssignedOfficeIds(officeIds))
+            .asyncExpand((activeOfficeIds) {
+          if (activeOfficeIds.isEmpty) {
+            return Stream.value(
+              const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+            );
+          }
+          final scopedQuery = query.where('officeId', whereIn: activeOfficeIds);
+          return scopedQuery.snapshots().map((snapshot) {
+            final documents = snapshot.docs.toList()
+              ..sort((a, b) {
+                final aTime = a.data()['occurredAt'];
+                final bTime = b.data()['occurredAt'];
+                final aDate = aTime is Timestamp ? aTime.toDate() : DateTime(2000);
+                final bDate = bTime is Timestamp ? bTime.toDate() : DateTime(2000);
+                return bDate.compareTo(aDate);
+              });
+            return documents.take(limit).toList();
+          });
+        });
+      }
+      return query.snapshots().map((snapshot) {
+        final documents = snapshot.docs.toList()
+          ..sort((a, b) {
+            final aTime = a.data()['occurredAt'];
+            final bTime = b.data()['occurredAt'];
+            final aDate = aTime is Timestamp ? aTime.toDate() : DateTime(2000);
+            final bDate = bTime is Timestamp ? bTime.toDate() : DateTime(2000);
+            return bDate.compareTo(aDate);
+          });
+        return documents.take(limit).toList();
+      });
+    });
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _filterAssetDocuments(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents, {
+    String? status,
+    List<String>? statuses,
+  }) {
+    final filtered = documents.where((document) {
+      final value = document.data()['status'];
+      if (status != null) return value == status;
+      if (statuses != null && statuses.isNotEmpty) return statuses.contains(value);
+      return true;
+    }).toList()
+      ..sort((a, b) => ((a.data()['brand'] as String?) ?? '')
+          .compareTo((b.data()['brand'] as String?) ?? ''));
+    return filtered;
+  }
+
+  Stream<List<Asset>> watchAssets() => watchAssetDocuments().map(
+        (documents) => documents
+            .map((document) => Asset.fromMap(document.id, document.data()))
+            .toList(),
+      );
 
   Future<void> createAsset(Asset asset) async {
     final serial = _normalizeSerial(asset.serialNumber);
     final assetRef = _assets.doc(asset.id);
     final assetData = asset.toMap()..['serialNumber'] = serial;
-    if (serial.isNotEmpty) {
-      final existingAssets = await _assets.get();
-      final duplicate = existingAssets.docs.any((doc) =>
-          _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
-          serial);
-      if (duplicate) throw StateError('الرقم التسلسلي مسجل مسبقاً');
-    }
     await _db.runTransaction((tx) async {
       final assetSnapshot = await tx.get(assetRef);
       if (assetSnapshot.exists) {
@@ -60,6 +191,7 @@ class AssetRepository {
         tx.set(serialRef, {
           'assetId': asset.id,
           'serialNumber': serial,
+          'officeId': asset.officeId,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -70,15 +202,6 @@ class AssetRepository {
     final assetRef = _assets.doc(asset.id);
     final newSerial = _normalizeSerial(asset.serialNumber);
     final assetData = asset.toMap()..['serialNumber'] = newSerial;
-    if (newSerial.isNotEmpty) {
-      final existingAssets = await _assets.get();
-      final duplicate = existingAssets.docs.any((doc) =>
-          doc.id != asset.id &&
-          _normalizeSerial(doc.data()['serialNumber'] as String? ?? '') ==
-              newSerial);
-      if (duplicate) throw StateError('الرقم التسلسلي مسجل لجهاز آخر');
-    }
-
     await _db.runTransaction((tx) async {
       final assetSnapshot = await tx.get(assetRef);
       if (!assetSnapshot.exists) {
@@ -120,6 +243,7 @@ class AssetRepository {
         tx.set(newSerialRef, {
           'assetId': asset.id,
           'serialNumber': newSerial,
+          'officeId': asset.officeId,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
@@ -158,15 +282,27 @@ class AssetRepository {
         if (fromOfficeId == destination.id) {
           throw StateError('الجهاز موجود بالفعل في المكتب المحدد');
         }
+        final serial = _normalizeSerial(data['serialNumber'] as String? ?? '');
+        DocumentReference<Map<String, dynamic>>? serialRef;
+        DocumentSnapshot<Map<String, dynamic>>? serialSnapshot;
+        if (serial.isNotEmpty) {
+          serialRef = _serialRef(serial);
+          serialSnapshot = await tx.get(serialRef);
+        }
+        // All transaction reads are completed before the first write.
         tx.update(assetRef, {
           'officeId': destination.id,
           'officeName': officeName,
           'transferredAt': FieldValue.serverTimestamp(),
         });
+        if (serialRef != null && serialSnapshot!.exists) {
+          tx.update(serialRef, {'officeId': destination.id});
+        }
         final movement = _db.collection('asset_movements').doc();
         tx.set(movement, {
           'assetId': asset.id,
           'assetLabel': '${data['brand'] ?? ''} ${data['model'] ?? ''}'.trim(),
+          'officeId': destination.id,
           'movementType': 'transferred',
           'occurredAt': FieldValue.serverTimestamp(),
           'fromOfficeId': fromOfficeId,
@@ -202,6 +338,7 @@ class AssetRepository {
         tx.set(movement, {
           'assetId': asset.id,
           'assetLabel': '${asset.brand} ${asset.model}',
+          'officeId': snap.data()?['officeId'],
           'movementType': 'retired',
           'occurredAt': FieldValue.serverTimestamp(),
           'notes': reason.trim(),

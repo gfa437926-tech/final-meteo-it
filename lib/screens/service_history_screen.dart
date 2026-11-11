@@ -1,6 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/asset.dart';
+import '../models/maintenance_record.dart';
+import '../services/asset_repository.dart';
+import '../services/maintenance_repository.dart';
 
 class ServiceHistoryScreen extends StatefulWidget {
   const ServiceHistoryScreen({super.key});
@@ -10,13 +13,15 @@ class ServiceHistoryScreen extends StatefulWidget {
 }
 
 class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
+  final assetsRepository = AssetRepository();
+  final maintenanceRepository = MaintenanceRepository();
   String? selectedAssetId;
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('السجل الفني للأجهزة')),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        body: StreamBuilder<List<Asset>>(
+          stream: assetsRepository.watchAssets(),
           builder: (context, assetsSnapshot) {
             if (assetsSnapshot.hasError) {
               return Center(child: Text('تعذر تحميل الأصول: ${assetsSnapshot.error}'));
@@ -24,12 +29,13 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
             if (!assetsSnapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-            final assets = assetsSnapshot.data!.docs;
+            final assets = assetsSnapshot.data!;
             if (assets.isEmpty) {
-              return const Center(child: Text('لا توجد أصول مسجلة'));
+              return const Center(child: Text('لا توجد أصول ضمن المكاتب المصرح بها'));
             }
-            final validSelection = assets.any((asset) => asset.id == selectedAssetId);
-            final selected = validSelection ? selectedAssetId : assets.first.id;
+            final selected = assets.any((asset) => asset.id == selectedAssetId)
+                ? selectedAssetId!
+                : assets.first.id;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -42,23 +48,21 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                       prefixIcon: Icon(Icons.devices_other),
                     ),
                     items: assets.map((asset) {
-                      final data = asset.data();
-                      final label = '${data['brand'] ?? ''} ${data['model'] ?? ''}'.trim();
-                      final serial = data['serialNumber'] as String? ?? '';
+                      final label = '${asset.brand} ${asset.model}'.trim();
                       return DropdownMenuItem(
                         value: asset.id,
-                        child: Text(serial.isEmpty ? label : '$label • $serial',
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          asset.serialNumber.isEmpty ? label : '$label • ${asset.serialNumber}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     onChanged: (value) => setState(() => selectedAssetId = value),
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('maintenance_records')
-                        .snapshots(),
+                  child: StreamBuilder<List<MaintenanceRecord>>(
+                    stream: maintenanceRepository.watch(),
                     builder: (context, historySnapshot) {
                       if (historySnapshot.hasError) {
                         return Center(child: Text('تعذر تحميل السجل: ${historySnapshot.error}'));
@@ -66,15 +70,12 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                       if (!historySnapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      final records = historySnapshot.data!.docs
-                          .where((doc) => doc.data()['assetId'] == selected)
+                      final records = historySnapshot.data!
+                          .where((record) => record.assetId == selected)
                           .toList()
-                        ..sort((a, b) => _date(b.data()['reportedAt'])
-                            .compareTo(_date(a.data()['reportedAt'])));
+                        ..sort((a, b) => b.reportedAt.compareTo(a.reportedAt));
                       final totalCost = records.fold<double>(
-                        0,
-                        (total, doc) => total + ((doc.data()['cost'] as num?)?.toDouble() ?? 0) +
-                            ((doc.data()['partsCost'] as num?)?.toDouble() ?? 0),
+                        0, (total, record) => total + record.cost + record.partsCost,
                       );
                       return Column(
                         children: [
@@ -104,41 +105,31 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
                                     itemCount: records.length,
                                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                                     itemBuilder: (context, index) {
-                                      final data = records[index].data();
-                                      final status = data['status'] as String? ?? 'open';
-                                      final reported = _date(data['reportedAt']);
-                                      final completed = _date(data['completedAt']);
-                                      final cost = (data['cost'] as num?)?.toDouble() ?? 0;
-                                      final partsCost = (data['partsCost'] as num?)?.toDouble() ?? 0;
+                                      final record = records[index];
                                       return Card(
                                         child: ListTile(
                                           leading: CircleAvatar(
-                                            child: Icon(status == 'completed'
+                                            child: Icon(record.status == MaintenanceStatus.completed
                                                 ? Icons.check_circle_outline
-                                                : status == 'cancelled'
+                                                : record.status == MaintenanceStatus.cancelled
                                                     ? Icons.cancel_outlined
                                                     : Icons.build_outlined),
                                           ),
-                                          title: Text(data['title'] as String? ?? 'طلب صيانة',
+                                          title: Text(record.title,
                                               style: const TextStyle(fontWeight: FontWeight.bold)),
                                           subtitle: Padding(
                                             padding: const EdgeInsets.only(top: 6),
                                             child: Text(
-                                              'فتح الطلب: ${DateFormat('yyyy/MM/dd').format(reported)}'
-                                              '${completed.year > 2000 ? '\nالإغلاق: ${DateFormat('yyyy/MM/dd').format(completed)}' : ''}'
-                                              '\nالفني: ${data['technician'] ?? 'غير محدد'}'
-                                              '\nتكلفة الصيانة: ${NumberFormat('#,##0.##').format(cost)}'
-                                              '\nقطع الغيار: ${NumberFormat('#,##0.##').format(partsCost)}'
-                                              '${(data['resolution'] as String? ?? '').trim().isEmpty ? '' : '\nالحل: ${data['resolution']}'}',
+                                              'فتح الطلب: ${DateFormat('yyyy/MM/dd').format(record.reportedAt)}'
+                                              '${record.completedAt == null ? '' : '\nالإغلاق: ${DateFormat('yyyy/MM/dd').format(record.completedAt!)}'}'
+                                              '\nالفني: ${record.technician.isEmpty ? 'غير محدد' : record.technician}'
+                                              '\nتكلفة الصيانة: ${NumberFormat('#,##0.##').format(record.cost)}'
+                                              '\nقطع الغيار: ${NumberFormat('#,##0.##').format(record.partsCost)}'
+                                              '${record.resolution.trim().isEmpty ? '' : '\nالحل: ${record.resolution}'}',
                                             ),
                                           ),
                                           isThreeLine: true,
-                                          trailing: Chip(label: Text(switch (status) {
-                                            'completed' => 'مكتمل',
-                                            'cancelled' => 'ملغى',
-                                            'inProgress' => 'قيد التنفيذ',
-                                            _ => 'مفتوح',
-                                          })),
+                                          trailing: Chip(label: Text(record.status.label)),
                                         ),
                                       );
                                     },
@@ -154,13 +145,6 @@ class _ServiceHistoryScreenState extends State<ServiceHistoryScreen> {
           },
         ),
       );
-
-  static DateTime _date(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value) ?? DateTime(2000);
-    return DateTime(2000);
-  }
 }
 
 class _SummaryTile extends StatelessWidget {

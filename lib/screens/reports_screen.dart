@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:metra_it_assets/models/office.dart';
+import 'package:metra_it_assets/services/asset_repository.dart';
+import 'package:metra_it_assets/services/office_repository.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +18,9 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
+  final _assetRepository = AssetRepository();
+  final _officeRepository = OfficeRepository();
+
   String? categoryFilter;
   String? statusFilter;
   String? officeFilter;
@@ -242,8 +248,8 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('التقارير والجرد')),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('assets').snapshots(),
+        body: StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          stream: _assetRepository.watchAssetDocuments(),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Center(child: Text('تعذر تحميل الإحصائيات: ${snapshot.error}'));
@@ -252,7 +258,7 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
               return const Center(child: CircularProgressIndicator());
             }
 
-            final documents = snapshot.data!.docs.where((document) {
+            final documents = snapshot.data!.where((document) {
               final data = document.data();
               return (categoryFilter == null || data['category'] == categoryFilter) &&
                   (statusFilter == null || data['status'] == statusFilter) &&
@@ -275,10 +281,10 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance.collection('offices').orderBy('name').snapshots(),
+                StreamBuilder<List<Office>>(
+                  stream: _officeRepository.watchOffices(),
                   builder: (context, officeSnapshot) {
-                    final offices = officeSnapshot.data?.docs ?? [];
+                    final offices = officeSnapshot.data ?? const <Office>[];
                     return Wrap(
                       spacing: 12,
                       runSpacing: 10,
@@ -326,7 +332,7 @@ footer { margin-top: 15px; color: #536574; font-size: 10px; text-align: center; 
                               ...offices.map((office) => DropdownMenuItem<String>(
                                     value: office.id,
                                     child: Text(
-                                      office.data()['name'] as String? ?? office.id,
+                                      office.name,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   )),
